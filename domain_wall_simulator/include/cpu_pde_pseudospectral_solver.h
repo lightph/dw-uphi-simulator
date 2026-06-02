@@ -48,9 +48,6 @@ public:
   void initialize();
   void reset(InitialCondition new_ic);
 
-  // =========================================================================
-  // HIGH-EFFICIENCY LOGGING & SPECTRAL ACCUMULATION
-  // =========================================================================
   void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1);
   std::vector<REAL> get_and_clear_fine_phi_dot_history();
   std::vector<REAL> get_and_clear_fine_rugosity_history();
@@ -79,7 +76,6 @@ private:
 
   FftwHandlerC2COut fftw_handler;
 
-  // Tracking and Spectral Accumulation State
   bool fine_tracking_enabled = false;
   size_t tracking_sample_rate = 1;
   unsigned int internal_step_counter = 0;
@@ -90,10 +86,6 @@ private:
   std::vector<REAL> d_u_power_spectrum;
   unsigned int spectrum_accumulations = 0;
 };
-
-// ==========================================================
-// Implementation
-// ==========================================================
 
 template <typename NonlinearPart, typename InitialCondition,
           typename LinearPart>
@@ -140,7 +132,6 @@ void cpu_pde_pseudospectral_stepper<N, I, L>::initialize()
     z_ptr[i] = initial_condition(x);
   }
 
-  // Unnormalized Forward FFT (Factor of 1)
   fftw_handler.do_fft(z_buf, zhat_buf);
 }
 
@@ -161,11 +152,9 @@ void cpu_pde_pseudospectral_stepper<NonlinearPart, InitialCondition, LinearPart>
 #pragma omp parallel for simd if (n_modes > 10000)
   for (size_t i = 0; i < n_modes; ++i)
   {
-    // 1. Evaluate nonlinear term on the correctly scaled physical z
     N_ptr[i] = nonlinear_part(z_ptr[i], t);
   }
 
-  // 2. Unnormalized Forward FFT (Factor of 1)
   fftw_handler.do_fft(N_buf, Nhat_buf);
 
   COMPLEX *zhat_ptr = zhat_buf.data();
@@ -176,14 +165,11 @@ void cpu_pde_pseudospectral_stepper<NonlinearPart, InitialCondition, LinearPart>
 #pragma omp parallel for simd if (n_modes > 10000)
   for (size_t i = 0; i < n_modes; ++i)
   {
-    // 3. Fused frequency step update
     zhat_ptr[i] = d_ptr[i] * (f_ptr[i] * zhat_ptr[i] + dt * Nhat_ptr[i]);
   }
 
-  // 4. Inverse FFT (Introduces a scaling factor of N)
   fftw_handler.do_ifft(zhat_buf, z_buf);
 
-  // 5. Scale back to physical units to match GPU logic
   REAL inv_N = static_cast<REAL>(1.0) / static_cast<REAL>(n_modes);
 #pragma omp parallel for simd if (n_modes > 10000)
   for (size_t i = 0; i < n_modes; ++i)
@@ -193,7 +179,6 @@ void cpu_pde_pseudospectral_stepper<NonlinearPart, InitialCondition, LinearPart>
 
   t += dt;
 
-  // --- Metrics Recording Hook ---
   if (fine_tracking_enabled && (internal_step_counter % tracking_sample_rate == 0))
   {
     // Compute mean_phidot and rugosity here and push them to d_phi_dot_history and d_rugosity_history.
@@ -252,10 +237,6 @@ void cpu_pde_pseudospectral_stepper<N, I, L>::run_block(size_t steps)
     step();
   }
 }
-
-// =========================================================================
-// HIGH-EFFICIENCY LOGGING & SPECTRAL ACCUMULATION IMPLEMENTATIONS
-// =========================================================================
 
 template <typename N, typename I, typename L>
 void cpu_pde_pseudospectral_stepper<N, I, L>::set_fine_tracking(bool enable, size_t sample_every_n_steps)

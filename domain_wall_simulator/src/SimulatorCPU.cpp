@@ -8,7 +8,6 @@ class SimulatorCPU : public IDomainWallSimulator
 {
     cpu_domain_wall<RandomInitialCondition> sim;
 
-    // --- High Efficiency Logging & Spectral State ---
     bool fine_tracking_enabled = false;
     size_t fine_sample_rate = 1;
     size_t fine_step_counter = 0;
@@ -27,14 +26,12 @@ public:
 
     void run_block(size_t steps) override
     {
-        // Fast path: if not tracking, just blast through the steps
         if (!fine_tracking_enabled)
         {
             sim.run_block(steps);
             return;
         }
 
-        // Chunking path to allow for periodic sampling without returning to main loop
         size_t steps_taken = 0;
         while (steps_taken < steps)
         {
@@ -65,10 +62,6 @@ public:
     }
 
     void create_step_graph(size_t steps) override { sim.create_step_graph(steps); }
-
-    // =========================================================================
-    // HIGH-EFFICIENCY LOGGING & SPECTRAL ACCUMULATION
-    // =========================================================================
 
     void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1) override
     {
@@ -109,7 +102,6 @@ public:
 
         const FFTW_COMPLEX_STD *data = zhat.data();
 
-// Accumulate using OpenMP to match CPU backend parallelism
 #pragma omp parallel for
         for (size_t k = 0; k < N; ++k)
         {
@@ -120,7 +112,6 @@ public:
             SIM_REAL z_minus_k_re = data[minus_k].real();
             SIM_REAL z_minus_k_im = data[minus_k].imag();
 
-            // U(k) = 0.5 * (Z(k) + Z^*(-k))
             SIM_REAL Uk_re = static_cast<SIM_REAL>(0.5) * (zk_re + z_minus_k_re);
             SIM_REAL Uk_im = static_cast<SIM_REAL>(0.5) * (zk_im - z_minus_k_im);
 
@@ -151,8 +142,6 @@ public:
         std::fill(u_power_spectrum_acc.begin(), u_power_spectrum_acc.end(), static_cast<SIM_REAL>(0.0));
         power_spectrum_count = 0;
     }
-
-    // =========================================================================
 
     void get_z_host(std::vector<SIM_COMPLEX> &out) const override
     {
@@ -224,7 +213,7 @@ public:
         SIM_REAL inv_n = static_cast<SIM_REAL>(1.0) / static_cast<SIM_REAL>(n);
         SIM_REAL mean_u = sum_u * inv_n;
         SIM_REAL mean_phi = static_cast<SIM_REAL>(-1.0) * (sum_phi * inv_n);
-        SIM_REAL mean_phi_dot = sum_phi_dot * inv_n; // This yields <phi_dot>_x
+        SIM_REAL mean_phi_dot = sum_phi_dot * inv_n;
 
         SIM_REAL sum_sq_diff = static_cast<SIM_REAL>(0.0);
 #pragma omp simd reduction(+ : sum_sq_diff)
@@ -236,7 +225,6 @@ public:
 
         SIM_REAL rugosity = sum_sq_diff * inv_n;
 
-        // Return struct matching definition: {mean_u, mean_phi, mean_phidot, rugosity}
         return {mean_u, mean_phi, mean_phi_dot, rugosity};
     }
 };

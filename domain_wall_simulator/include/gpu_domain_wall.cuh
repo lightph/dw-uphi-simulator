@@ -72,7 +72,7 @@ public:
   {
     initial_condition = new_ic;
     stepper.reset(new_ic);
-    graph_needs_update = true; // Force graph rebuild in case the memory topology changed
+    graph_needs_update = true;
   }
 
   struct NonLinear
@@ -81,7 +81,7 @@ public:
     cuda_math::REAL h0;
     cuda_math::REAL Omega;
     cuda_math::REAL alpha;
-    cuda_math::COMPLEX prefactor; // Precomputed constant
+    cuda_math::COMPLEX prefactor;
 
     NonLinear(cuda_math::REAL h_, cuda_math::REAL h0_, cuda_math::REAL Omega_, cuda_math::REAL alpha_)
         : h(h_), h0(h0_), Omega(Omega_), alpha(alpha_),
@@ -92,16 +92,14 @@ public:
         operator()(cuda_math::COMPLEX z, cuda_math::REAL t) const
     {
       cuda_math::REAL current_h = h + h0 * cos(Omega * t);
-      // Use precomputed prefactor instead of constructing it every thread/step
       return prefactor * cuda_math::COMPLEX(alpha * current_h, sin(static_cast<cuda_math::REAL>(2.0) * z.imag()));
     }
   };
 
-  // Optimized Linear functor
   struct Linear
   {
     cuda_math::REAL alpha;
-    cuda_math::COMPLEX prefactor; // Precomputed constant
+    cuda_math::COMPLEX prefactor;
 
     Linear(cuda_math::REAL alpha_)
         : alpha(alpha_),
@@ -111,7 +109,6 @@ public:
         cuda_math::COMPLEX
         operator()(cuda_math::REAL k) const
     {
-      // Use precomputed prefactor
       return prefactor * (k * k);
     }
   };
@@ -123,8 +120,8 @@ public:
         system_size(system_size_),
         n_samples(CufftUtils::getOptimalSize(
             static_cast<size_t>(std::ceil(system_size_ / min_resolution_)))),
-        nonlinear(h_, h0_, Omega_, alpha_), // Initialize with new constructor
-        linear(alpha_),                     // Initialize with new constructor
+        nonlinear(h_, h0_, Omega_, alpha_),
+        linear(alpha_),
         initial_condition(initial_condition_),
         stepper(n_samples, system_size_, dt_, nonlinear, initial_condition_, linear)
   {
@@ -135,7 +132,6 @@ public:
     stepper.set_time(t_);
   }
 
-  // Delegate time to the stepper to prevent desynchronization
   cuda_math::REAL get_time() const override { return stepper.get_time(); }
   cuda_math::REAL get_dt() const override { return dt; }
   cuda_math::REAL get_Omega() const override { return Omega; }
@@ -145,7 +141,7 @@ public:
     h = h_;
     nonlinear.h = h_;
     stepper.set_nonlinear_part(nonlinear);
-    graph_needs_update = true; // Flag for rebuild
+    graph_needs_update = true;
   }
 
   void set_alpha(cuda_math::REAL alpha_)
@@ -157,7 +153,7 @@ public:
     linear.prefactor = cuda_math::COMPLEX(static_cast<cuda_math::REAL>(-0.5) * alpha_, static_cast<cuda_math::REAL>(0.5));
     stepper.set_nonlinear_part(nonlinear);
     stepper.set_linear_part(linear);
-    graph_needs_update = true; // Flag for rebuild
+    graph_needs_update = true;
   }
 
   void set_h0(cuda_math::REAL h0_)
@@ -165,7 +161,7 @@ public:
     h0 = h0_;
     nonlinear.h0 = h0_;
     stepper.set_nonlinear_part(nonlinear);
-    graph_needs_update = true; // Flag for rebuild
+    graph_needs_update = true;
   }
 
   void set_Omega(cuda_math::REAL Omega_)
@@ -173,14 +169,14 @@ public:
     Omega = Omega_;
     nonlinear.Omega = Omega_;
     stepper.set_nonlinear_part(nonlinear);
-    graph_needs_update = true; // Flag for rebuild
+    graph_needs_update = true;
   }
 
   void set_dt(cuda_math::REAL dt_)
   {
     dt = dt_;
     stepper.set_dt(dt_);
-    graph_needs_update = true; // Flag for rebuild
+    graph_needs_update = true;
   }
 
   const cuda_math::COMPLEX_DEVICE_VECTOR &get_z() const override { return stepper.get_z(); }
@@ -200,7 +196,7 @@ public:
   {
     if (graph_needs_update)
     {
-      stepper.create_step_graph(steps); // Pass steps here
+      stepper.create_step_graph(steps);
       graph_needs_update = false;
     }
     stepper.run_block(steps);

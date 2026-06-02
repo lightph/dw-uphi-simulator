@@ -144,9 +144,6 @@ public:
     initialize();
   }
 
-  // =========================================================================
-  // HIGH-EFFICIENCY LOGGING & SPECTRAL ACCUMULATION
-  // =========================================================================
   void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1);
   std::vector<REAL> get_and_clear_fine_phi_dot_history();
   std::vector<REAL> get_and_clear_fine_rugosity_history();
@@ -177,15 +174,13 @@ private:
 
   CufftHandlerC2COut cufft_handler;
 
-  // Persistent Execution Variables
   cudaStream_t exec_stream;
   cudaGraph_t stepGraph;
   cudaGraphExec_t stepExec;
   bool graphCreated = false;
-  size_t captured_steps = 0; // Tracks internal graph chunk size
+  size_t captured_steps = 0;
   REAL invN;
 
-  // Tracking and Spectral Accumulation State
   bool fine_tracking_enabled = false;
   size_t tracking_sample_rate = 1;
   unsigned int internal_step_counter = 0;
@@ -316,7 +311,6 @@ void gpu_pde_pseudospectral_stepper<N, I, L>::step_on_stream(cudaStream_t stream
 
   pseudospectral_detail::advance_time_kernel<<<1, 1, 0, stream>>>(d_t_ptr, dt);
 
-  // --- Metrics Recording Hook ---
   if (fine_tracking_enabled && (internal_step_counter % tracking_sample_rate == 0))
   {
     // Place CUDA kernels or Thrust reductions here to compute mean_phidot
@@ -339,19 +333,16 @@ void gpu_pde_pseudospectral_stepper<N, I, L>::create_step_graph(size_t steps)
     graphCreated = false;
   }
 
-  // Safety Net: Hard cap the captured graph steps to prevent OOM
   const size_t MAX_GRAPH_STEPS = 1000;
   captured_steps = std::min(steps, MAX_GRAPH_STEPS);
 
   cufft_handler.setStream(exec_stream);
 
-  // Backup state before warmup
   COMPLEX_VECTOR z_backup = z_buf;
 
   this->step_on_stream(exec_stream);
   cudaStreamSynchronize(exec_stream);
 
-  // Restore state after warmup
   z_buf = z_backup;
 
   REAL *d_t_ptr = thrust::raw_pointer_cast(d_t_vec.data());
@@ -360,7 +351,6 @@ void gpu_pde_pseudospectral_stepper<N, I, L>::create_step_graph(size_t steps)
 
   cudaStreamBeginCapture(exec_stream, cudaStreamCaptureModeGlobal);
 
-  // Capture the capped chunk of steps
   for (size_t i = 0; i < captured_steps; ++i)
   {
     this->step_on_stream(exec_stream);
@@ -406,7 +396,6 @@ void gpu_pde_pseudospectral_stepper<N, I, L>::run_block(size_t steps)
       cudaGraphLaunch(stepExec, exec_stream);
     }
 
-    // Process any leftover steps not evenly divisible by the chunk size
     for (size_t i = 0; i < remainder; ++i)
     {
       this->step_on_stream(exec_stream);
@@ -415,13 +404,8 @@ void gpu_pde_pseudospectral_stepper<N, I, L>::run_block(size_t steps)
 
   cudaStreamSynchronize(exec_stream);
 
-  // Advance host time tracker
   t += dt * steps;
 }
-
-// =========================================================================
-// HIGH-EFFICIENCY LOGGING & SPECTRAL ACCUMULATION IMPLEMENTATIONS
-// =========================================================================
 
 template <typename N, typename I, typename L>
 void gpu_pde_pseudospectral_stepper<N, I, L>::set_fine_tracking(bool enable, size_t sample_every_n_steps)

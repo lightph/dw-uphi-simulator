@@ -22,7 +22,6 @@ bool is_cuda_available()
     return deviceCount > 0;
 }
 
-// Functor to compute and accumulate the power spectrum of u from Z = U - i * Phi
 struct AccumulateUPowerSpectrum
 {
     const cuda_math::COMPLEX *zhat;
@@ -31,14 +30,11 @@ struct AccumulateUPowerSpectrum
 
     __device__ void operator()(size_t k) const
     {
-        // For cuFFT standard layout: -k is at N - k
         size_t minus_k = (k == 0) ? 0 : N - k;
 
         cuda_math::COMPLEX zk = zhat[k];
         cuda_math::COMPLEX z_minus_k = zhat[minus_k];
 
-        // U(k) = 0.5 * (Z(k) + Z^*(-k))
-        // Note: Z^*(-k) has real part z_minus_k.real(), and imag part -z_minus_k.imag()
         SIM_REAL Uk_re = static_cast<SIM_REAL>(0.5) * (zk.real() + z_minus_k.real());
         SIM_REAL Uk_im = static_cast<SIM_REAL>(0.5) * (zk.imag() - z_minus_k.imag());
 
@@ -51,7 +47,6 @@ class SimulatorGPU : public IDomainWallSimulator
 {
     gpu_domain_wall<RandomInitialCondition> sim;
 
-    // --- High Efficiency Logging State ---
     bool fine_tracking_enabled = false;
     size_t fine_sample_rate = 1;
     size_t fine_step_counter = 0;
@@ -70,18 +65,15 @@ public:
 
     void run_block(size_t steps) override
     {
-        // Fast path: if not tracking, execute the single large block (graph optimized)
         if (!fine_tracking_enabled)
         {
             sim.run_block(steps);
             return;
         }
 
-        // Slow/Hybrid path: Chunks execution to allow for periodic sampling
         size_t steps_taken = 0;
         while (steps_taken < steps)
         {
-            // Calculate how many steps until the next required sample
             size_t next_sample_dist = fine_sample_rate - (fine_step_counter % fine_sample_rate);
             size_t chunk = std::min(next_sample_dist, steps - steps_taken);
 
@@ -89,7 +81,7 @@ public:
             {
                 if (chunk > 1)
                 {
-                    sim.run_block(chunk); // Still uses CUDA graphs for the chunk size!
+                    sim.run_block(chunk);
                 }
                 else
                 {
@@ -99,7 +91,6 @@ public:
                 fine_step_counter += chunk;
             }
 
-            // Record the metric if we hit a sampling boundary
             if (fine_step_counter % fine_sample_rate == 0)
             {
                 SpatialMetrics m = get_spatial_metrics();
@@ -115,10 +106,6 @@ public:
     {
         sim.reset(RandomInitialCondition(ic_amplitude, ic_seed));
     }
-
-    // =========================================================================
-    // NEW LOGGING & SPECTRAL ACCUMULATION METHODS
-    // =========================================================================
 
     void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1) override
     {
@@ -151,7 +138,6 @@ public:
         const auto &zhat = sim.get_zhat();
         size_t N = zhat.size();
 
-        // Lazy initialize the device accumulator
         if (d_power_spectrum_acc.size() != N)
         {
             d_power_spectrum_acc.assign(N, static_cast<SIM_REAL>(0.0));
@@ -176,11 +162,9 @@ public:
 
         if (power_spectrum_count > 0)
         {
-            // Copy accumulation buffer once to host
             std::vector<SIM_REAL> host_acc(d_power_spectrum_acc.size());
             thrust::copy(d_power_spectrum_acc.begin(), d_power_spectrum_acc.end(), host_acc.begin());
 
-            // Average it out
             SIM_REAL inv_count = static_cast<SIM_REAL>(1.0) / static_cast<SIM_REAL>(power_spectrum_count);
             for (size_t i = 0; i < host_acc.size(); ++i)
             {
@@ -195,8 +179,6 @@ public:
         thrust::fill(d_power_spectrum_acc.begin(), d_power_spectrum_acc.end(), static_cast<SIM_REAL>(0.0));
         power_spectrum_count = 0;
     }
-
-    // =========================================================================
 
     void get_z_host(std::vector<SIM_COMPLEX> &out) const override
     {
@@ -291,7 +273,6 @@ public:
 
         SIM_REAL rugosity = sum_sq_diff * inv_n;
 
-        // Returned in exactly the order specified by your SpatialMetrics struct
         return {mean_u, mean_phi, mean_phidot, rugosity};
     }
 };

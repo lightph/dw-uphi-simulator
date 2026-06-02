@@ -9,7 +9,6 @@ The project features an optimized core utilizing pseudospectral methods to solve
 * `fft-handlers/`: Fast Fourier Transform wrappers for CPU (FFTW3) and GPU (cuFFT).
 * `include/`: Shared project headers and utilities (e.g., file saving routines).
 * `programs/`: Executable entry points for the active experiments (`h_sweep`, `complete_h_sweep`, `structure_analysis`).
-* `python/`: Post-processing, data analysis, and plotting scripts.
 
 ## Dependencies
 To compile this project, the following dependencies are required:

@@ -1,6 +1,6 @@
 # Domain Wall Simulator
 
-This repository contains the C++ and CUDA simulation code used to model domain wall dynamics.
+This repository contains the C++ and CUDA simulation code used to model domain wall dynamics for the associated physics paper. 
 
 The project features an optimized core utilizing pseudospectral methods to solve partial differential equations. It supports both CPU-only execution (via OpenMP) and highly parallel GPU-accelerated execution (via CUDA).
 
@@ -25,14 +25,23 @@ To compile this project, the following dependencies are required:
 By default, the build system compiles with CUDA support and double precision. All executables and libraries are automatically routed to `bin/` and `lib/` subdirectories within the build folder.
 
 1. Create a build directory and run CMake:
-```bash
+   ```bash
    mkdir build
    cd build
    cmake .. -DUSE_CUDA=ON -DUSE_DOUBLE_PRECISION=ON
-
-   *Configuration notes*:
-   * Set -DUSE_CUDA=OFF if you do not have a compatible NVIDIA GPU.
-   * Set -DUSE_DOUBLE_PRECISION=OFF to compile in single precision for improved performance (not recommended).
+   ```
+   *Configuration Notes:* * Set `-DUSE_CUDA=OFF` if you do not have a compatible NVIDIA GPU. 
+   * Set `-DUSE_DOUBLE_PRECISION=OFF` to compile in single precision for improved performance (not recommended).
 
 2. Compile the project:
-  make -j$(nproc)
+   ```bash
+   make -j$(nproc)
+   ```
+
+## Usage
+Once compiled, the resulting binaries are located in the `build/bin/` directory. They will have a suffix corresponding to the precision used during the build (`_dp` for double precision, `_sp` for single precision).
+
+Available targets:
+* `h_sweep_dp`
+* `complete_h_sweep_dp`
+* `structure_analysis_dp`

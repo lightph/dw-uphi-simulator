@@ -13,10 +13,9 @@
 
 int main(int argc, char *argv[])
 {
-    bool request_gpu = true; // Default to GPU
+    bool request_gpu = true;
     std::vector<std::string> args;
 
-    // Parse arguments and filter out flags
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
@@ -42,7 +41,6 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Positional arguments are now safely in the args vector (0-indexed)
     const SIM_REAL Omega = static_cast<SIM_REAL>(std::stod(args[0]));
     const SIM_REAL h0 = static_cast<SIM_REAL>(std::stod(args[1]));
     const SIM_REAL system_size = static_cast<SIM_REAL>(std::stod(args[2]));
@@ -80,7 +78,6 @@ int main(int argc, char *argv[])
     BinarySaver saver("output", "unified_h_sweep", sweep_params);
     auto sweep_start_time = std::chrono::steady_clock::now();
 
-    // Setup base configuration
     SimulatorConfig config;
     config.backend = request_gpu ? ComputeBackend::GPU : ComputeBackend::CPU;
     config.alpha = alpha;
@@ -93,7 +90,6 @@ int main(int argc, char *argv[])
     std::cout << "[INFO] Initializing simulator on requested backend: "
               << (request_gpu ? "GPU" : "CPU") << "...\n";
 
-    // Instantiate the simulator ONCE outside the loop
     auto wall = create_simulator(config);
 
     for (int k = 0; k < hnumber; ++k)
@@ -107,7 +103,6 @@ int main(int argc, char *argv[])
         SIM_REAL T_cfl = (min_resolution * min_resolution) / (alpha + 1e-6);
         SIM_REAL target_dt = std::min(T_phys / 50.0, T_cfl * 1.0);
 
-        // Clean state updates
         wall->set_h(h);
         wall->set_dt(std::min(target_dt, dt));
         wall->reset(0.02, seed);
@@ -117,7 +112,6 @@ int main(int argc, char *argv[])
 
         auto run_start_time = std::chrono::steady_clock::now();
 
-        // Run unified experiment loop
         run_simulation(*wall, exp, wall->get_dt(), max_steps, periodsphi, periods_in_block);
 
         auto run_end_time = std::chrono::steady_clock::now();

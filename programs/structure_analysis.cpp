@@ -15,7 +15,6 @@
 #include <xmmintrin.h>
 #include <pmmintrin.h>
 
-// Include the headers for your simulator and FFTW handler
 #include "DomainWallSimulator.h"
 #include "FftwHandler.h"
 
@@ -132,10 +131,6 @@ int main(int argc, char **argv)
             {
                 num_realizations = std::stoi(argv[++i]);
             }
-            else if (arg == "--avg_time")
-            {
-                i++; // Ignore deprecated argument gracefully
-            }
             else
             {
                 std::cerr << "Unknown or incomplete argument: " << arg << "\n";
@@ -172,7 +167,7 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    const SIM_REAL period = 4.0 * M_PI;
+    const SIM_REAL period = (config.Omega > 1e-12) ? (4.0 * M_PI / config.Omega) : 1e9;
     std::cout << "Initializing Simulator Ensemble...\n"
               << "Backend: " << backend_arg << " | Size: " << config.system_size << " | h: " << config.h << " | h0: " << config.h0 << "\n"
               << "Realizations: " << num_realizations << " | Power of 2 Range: [" << start_p << ", " << end_p << "]\n"
@@ -203,7 +198,6 @@ int main(int argc, char **argv)
 
             sim->reset(config.ic_amplitude, current_seed);
 
-            // Open the scalar file only when the final realization begins
             if (r == num_realizations - 1)
             {
                 scalar_out.open("ensemble_scalars_L" + std::to_string(config.system_size) + "_h" + std::to_string(config.h) + ".txt");
@@ -227,7 +221,6 @@ int main(int argc, char **argv)
                     }
                 }
 
-                // Phase 2: Averaging window using block execution for correct data population
                 sim->set_fine_tracking(true, 1);
                 sim->reset_spectrum_accumulator();
 
@@ -246,12 +239,10 @@ int main(int argc, char **argv)
                     sim->accumulate_u_power_spectrum();
                 }
 
-                // Fetch data BEFORE disabling tracking
                 std::vector<SIM_REAL> sf_averaged = sim->get_averaged_u_power_spectrum();
                 std::vector<SIM_REAL> phidot_history = sim->get_and_clear_fine_phi_dot_history();
                 std::vector<SIM_REAL> rugosity_history = sim->get_and_clear_fine_rugosity_history();
 
-                // Now disable tracking
                 sim->set_fine_tracking(false);
 
                 if (ensemble_sf[p_idx].empty())
@@ -304,7 +295,6 @@ int main(int argc, char **argv)
                     }
                 }
 
-                // If this is the absolute last realization, normalize and save this specific power of 2 immediately
                 if (r == num_realizations - 1)
                 {
                     ensemble_avg_phidot[p_idx] /= num_realizations;
@@ -347,7 +337,6 @@ int main(int argc, char **argv)
                 scalar_out.close();
             }
 
-            // Phase 3: Spatial snapshots (last 5 realizations)
             if (r >= num_realizations - 5)
             {
                 SIM_REAL current_time = sim->get_time();

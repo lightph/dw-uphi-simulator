@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
     const SIM_REAL min_res = (args.size() > 6) ? static_cast<SIM_REAL>(std::stod(args[6])) : 0.1;
     const size_t max_steps = (args.size() > 7) ? std::stoull(args[7]) : 1000000;
     const size_t periodsphi = (args.size() > 8) ? std::stoull(args[8]) : 100;
-    const size_t sample_rate = (args.size() > 9) ? std::stoull(args[9]) : 1; // Sample every N steps
+    const size_t sample_rate = (args.size() > 9) ? std::stoull(args[9]) : 1;
 
     std::map<std::string, std::string> params = {
         {"Backend", request_gpu ? "GPU" : "CPU"},
@@ -60,12 +60,10 @@ int main(int argc, char *argv[])
         {"SystemSize", std::to_string(system_size)},
         {"SampleRate", std::to_string(sample_rate)}};
 
-    // Initialize Saver
     BinarySaver summary_saver("output", "single_run_summary", params);
     BinarySaver phidot_saver("output", "single_run_phidot_series", params);
     BinarySaver spectrum_saver("output", "single_run_u_spectrum", params);
 
-    // Setup Simulator
     SimulatorConfig config;
     config.backend = request_gpu ? ComputeBackend::GPU : ComputeBackend::CPU;
     config.alpha = alpha;
@@ -80,20 +78,17 @@ int main(int argc, char *argv[])
 
     auto wall = create_simulator(config);
 
-    // Use the new experiment class
     SpectralVelocityExperiment exp(sample_rate);
 
     std::cout << "[INFO] Starting single run (h=" << h << ") on " << (request_gpu ? "GPU" : "CPU") << "...\n";
 
     auto start_t = std::chrono::steady_clock::now();
 
-    // Execute
     run_simulation(*wall, exp, dt, max_steps, periodsphi, 1);
 
     auto end_t = std::chrono::steady_clock::now();
     std::chrono::duration<double> duration = end_t - start_t;
 
-    // --- SAVE SUMMARY METRICS ---
     std::vector<double> summary = {
         static_cast<double>(alpha),
         static_cast<double>(h),
@@ -105,15 +100,12 @@ int main(int argc, char *argv[])
         duration.count()};
     summary_saver.saveRow(DataRow(std::move(summary)));
 
-    // --- SAVE PHI_DOT TIME SERIES ---
-    // We save this as one giant row of doubles
     std::vector<double> phidot_data;
     phidot_data.reserve(exp.fine_phi_dot_history.size());
     for (auto val : exp.fine_phi_dot_history)
         phidot_data.push_back(static_cast<double>(val));
     phidot_saver.saveRow(DataRow(std::move(phidot_data)));
 
-    // --- SAVE U POWER SPECTRUM ---
     std::vector<double> spectrum_data;
     spectrum_data.reserve(exp.final_u_power_spectrum.size());
     for (auto val : exp.final_u_power_spectrum)

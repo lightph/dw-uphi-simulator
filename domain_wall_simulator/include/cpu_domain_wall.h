@@ -28,27 +28,28 @@ public:
   virtual FFTW_REAL get_alpha() const = 0;
   virtual FFTW_REAL get_system_size() const = 0;
   virtual size_t get_n_samples() const = 0;
-
-  virtual void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1) = 0;
-  virtual std::vector<FFTW_REAL> get_and_clear_fine_phi_dot_history() = 0;
-  virtual std::vector<FFTW_REAL> get_and_clear_fine_rugosity_history() = 0;
-  virtual void accumulate_u_power_spectrum() = 0;
-  virtual std::vector<FFTW_REAL> get_averaged_u_power_spectrum() const = 0;
-  virtual void reset_spectrum_accumulator() = 0;
 };
 
 struct RandomInitialCondition
 {
-  FFTW_REAL eps;
-  mutable std::mt19937 gen;
-  mutable std::uniform_real_distribution<FFTW_REAL> dist;
+  FFTW_REAL amplitude;
+  unsigned int master_seed;
 
-  RandomInitialCondition(FFTW_REAL eps_val, int seed_offset)
-      : eps(eps_val), gen(std::random_device{}() + seed_offset),
-        dist(static_cast<FFTW_REAL>(0.0), eps_val) {}
-
-  FFTW_COMPLEX_STD operator()(FFTW_REAL /*x*/) const
+  RandomInitialCondition(FFTW_REAL amp, int seed_offset)
+      : amplitude(amp)
   {
+    std::random_device rd;
+    master_seed = static_cast<unsigned int>(rd() + seed_offset);
+  }
+
+  FFTW_COMPLEX_STD operator()(FFTW_REAL x) const
+  {
+    unsigned int unique_id = static_cast<unsigned int>((x + static_cast<FFTW_REAL>(10000.0)) * static_cast<FFTW_REAL>(100000.0));
+    unsigned int local_seed = master_seed ^ (unique_id * 2654435761U);
+
+    std::mt19937 gen(local_seed);
+    std::uniform_real_distribution<FFTW_REAL> dist(static_cast<FFTW_REAL>(0.0), amplitude);
+
     return FFTW_COMPLEX_STD(dist(gen), -dist(gen));
   }
 };

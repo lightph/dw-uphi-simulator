@@ -28,13 +28,6 @@ public:
   virtual cuda_math::REAL get_alpha() const = 0;
   virtual cuda_math::REAL get_system_size() const = 0;
   virtual size_t get_n_samples() const = 0;
-
-  virtual void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1) = 0;
-  virtual std::vector<cuda_math::REAL> get_and_clear_fine_phi_dot_history() = 0;
-  virtual std::vector<cuda_math::REAL> get_and_clear_fine_rugosity_history() = 0;
-  virtual void accumulate_u_power_spectrum() = 0;
-  virtual std::vector<cuda_math::REAL> get_averaged_u_power_spectrum() const = 0;
-  virtual void reset_spectrum_accumulator() = 0;
 };
 
 struct RandomInitialCondition

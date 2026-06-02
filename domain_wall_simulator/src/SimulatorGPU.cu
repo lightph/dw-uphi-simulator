@@ -61,7 +61,21 @@ public:
         : sim(cfg.alpha, cfg.h, cfg.h0, cfg.Omega, cfg.dt, cfg.system_size, cfg.min_res,
               RandomInitialCondition(cfg.ic_amplitude, cfg.ic_seed)) {}
 
-    void step() override { sim.step(); }
+    void step() override
+    {
+        sim.step();
+
+        if (fine_tracking_enabled)
+        {
+            fine_step_counter++;
+            if (fine_step_counter % fine_sample_rate == 0)
+            {
+                SpatialMetrics m = get_spatial_metrics();
+                host_fine_phi_dot_history.push_back(m.mean_phidot);
+                host_fine_rugosity_history.push_back(m.rugosity);
+            }
+        }
+    }
 
     void run_block(size_t steps) override
     {
@@ -105,79 +119,6 @@ public:
     void reset(SIM_REAL ic_amplitude, int ic_seed) override
     {
         sim.reset(RandomInitialCondition(ic_amplitude, ic_seed));
-    }
-
-    void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1) override
-    {
-        fine_tracking_enabled = enable;
-        fine_sample_rate = sample_every_n_steps;
-        if (!enable)
-        {
-            host_fine_phi_dot_history.clear();
-            host_fine_rugosity_history.clear();
-            fine_step_counter = 0;
-        }
-    }
-
-    std::vector<SIM_REAL> get_and_clear_fine_phi_dot_history() override
-    {
-        std::vector<SIM_REAL> result = std::move(host_fine_phi_dot_history);
-        host_fine_phi_dot_history.clear();
-        return result;
-    }
-
-    std::vector<SIM_REAL> get_and_clear_fine_rugosity_history() override
-    {
-        std::vector<SIM_REAL> result = std::move(host_fine_rugosity_history);
-        host_fine_rugosity_history.clear();
-        return result;
-    }
-
-    void accumulate_u_power_spectrum() override
-    {
-        const auto &zhat = sim.get_zhat();
-        size_t N = zhat.size();
-
-        if (d_power_spectrum_acc.size() != N)
-        {
-            d_power_spectrum_acc.assign(N, static_cast<SIM_REAL>(0.0));
-            power_spectrum_count = 0;
-        }
-
-        const cuda_math::COMPLEX *zhat_ptr = thrust::raw_pointer_cast(zhat.data());
-        SIM_REAL *acc_ptr = thrust::raw_pointer_cast(d_power_spectrum_acc.data());
-
-        thrust::counting_iterator<size_t> first(0);
-        thrust::counting_iterator<size_t> last(N);
-
-        AccumulateUPowerSpectrum functor{zhat_ptr, acc_ptr, N};
-        thrust::for_each(thrust::device, first, last, functor);
-
-        power_spectrum_count++;
-    }
-
-    std::vector<SIM_REAL> get_averaged_u_power_spectrum() const override
-    {
-        std::vector<SIM_REAL> host_avg(d_power_spectrum_acc.size(), static_cast<SIM_REAL>(0.0));
-
-        if (power_spectrum_count > 0)
-        {
-            std::vector<SIM_REAL> host_acc(d_power_spectrum_acc.size());
-            thrust::copy(d_power_spectrum_acc.begin(), d_power_spectrum_acc.end(), host_acc.begin());
-
-            SIM_REAL inv_count = static_cast<SIM_REAL>(1.0) / static_cast<SIM_REAL>(power_spectrum_count);
-            for (size_t i = 0; i < host_acc.size(); ++i)
-            {
-                host_avg[i] = host_acc[i] * inv_count;
-            }
-        }
-        return host_avg;
-    }
-
-    void reset_spectrum_accumulator() override
-    {
-        thrust::fill(d_power_spectrum_acc.begin(), d_power_spectrum_acc.end(), static_cast<SIM_REAL>(0.0));
-        power_spectrum_count = 0;
     }
 
     void get_z_host(std::vector<SIM_COMPLEX> &out) const override

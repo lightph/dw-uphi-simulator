@@ -48,14 +48,6 @@ public:
   void initialize();
   void reset(InitialCondition new_ic);
 
-  void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1);
-  std::vector<REAL> get_and_clear_fine_phi_dot_history();
-  std::vector<REAL> get_and_clear_fine_rugosity_history();
-
-  void accumulate_u_power_spectrum();
-  std::vector<REAL> get_averaged_u_power_spectrum() const;
-  void reset_spectrum_accumulator();
-
 private:
   REAL t = static_cast<REAL>(0.0);
   NonlinearPart nonlinear_part;
@@ -75,16 +67,6 @@ private:
   AlignedComplexVector zhat_buf;
 
   FftwHandlerC2COut fftw_handler;
-
-  bool fine_tracking_enabled = false;
-  size_t tracking_sample_rate = 1;
-  unsigned int internal_step_counter = 0;
-
-  std::vector<REAL> d_phi_dot_history;
-  std::vector<REAL> d_rugosity_history;
-
-  std::vector<REAL> d_u_power_spectrum;
-  unsigned int spectrum_accumulations = 0;
 };
 
 template <typename NonlinearPart, typename InitialCondition,
@@ -178,14 +160,6 @@ void cpu_pde_pseudospectral_stepper<NonlinearPart, InitialCondition, LinearPart>
   }
 
   t += dt;
-
-  if (fine_tracking_enabled && (internal_step_counter % tracking_sample_rate == 0))
-  {
-    // Compute mean_phidot and rugosity here and push them to d_phi_dot_history and d_rugosity_history.
-    // e.g. d_phi_dot_history.push_back(calculated_mean_phidot);
-    // e.g. d_rugosity_history.push_back(calculated_rugosity);
-  }
-  internal_step_counter++;
 }
 
 template <typename NonlinearPart, typename InitialCondition,
@@ -236,74 +210,4 @@ void cpu_pde_pseudospectral_stepper<N, I, L>::run_block(size_t steps)
   {
     step();
   }
-}
-
-template <typename N, typename I, typename L>
-void cpu_pde_pseudospectral_stepper<N, I, L>::set_fine_tracking(bool enable, size_t sample_every_n_steps)
-{
-  fine_tracking_enabled = enable;
-  tracking_sample_rate = sample_every_n_steps;
-  if (!enable)
-  {
-    d_phi_dot_history.clear();
-    d_rugosity_history.clear();
-  }
-}
-
-template <typename N, typename I, typename L>
-std::vector<FFTW_REAL> cpu_pde_pseudospectral_stepper<N, I, L>::get_and_clear_fine_phi_dot_history()
-{
-  std::vector<REAL> h = std::move(d_phi_dot_history);
-  d_phi_dot_history.clear();
-  return h;
-}
-
-template <typename N, typename I, typename L>
-std::vector<FFTW_REAL> cpu_pde_pseudospectral_stepper<N, I, L>::get_and_clear_fine_rugosity_history()
-{
-  std::vector<REAL> h = std::move(d_rugosity_history);
-  d_rugosity_history.clear();
-  return h;
-}
-
-template <typename N, typename I, typename L>
-void cpu_pde_pseudospectral_stepper<N, I, L>::accumulate_u_power_spectrum()
-{
-  if (d_u_power_spectrum.size() != n_modes)
-  {
-    d_u_power_spectrum.assign(n_modes, 0.0);
-    spectrum_accumulations = 0;
-  }
-
-  const COMPLEX *zhat_ptr = zhat_buf.data();
-
-#pragma omp parallel for simd if (n_modes > 10000)
-  for (size_t i = 0; i < n_modes; ++i)
-  {
-    COMPLEX val = zhat_ptr[i];
-    d_u_power_spectrum[i] += (val.real() * val.real() + val.imag() * val.imag());
-  }
-
-  spectrum_accumulations++;
-}
-
-template <typename N, typename I, typename L>
-std::vector<FFTW_REAL> cpu_pde_pseudospectral_stepper<N, I, L>::get_averaged_u_power_spectrum() const
-{
-  std::vector<REAL> host_spec = d_u_power_spectrum;
-  if (spectrum_accumulations > 0)
-  {
-    for (auto &val : host_spec)
-    {
-      val /= static_cast<REAL>(spectrum_accumulations);
-    }
-  }
-  return host_spec;
-}
-
-template <typename N, typename I, typename L>
-void cpu_pde_pseudospectral_stepper<N, I, L>::reset_spectrum_accumulator()
-{
-  std::fill(d_u_power_spectrum.begin(), d_u_power_spectrum.end(), static_cast<REAL>(0.0));
-  spectrum_accumulations = 0;
 }

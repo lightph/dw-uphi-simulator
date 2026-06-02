@@ -126,11 +126,12 @@ public:
 
   void set_time(REAL new_t)
   {
+    t = new_t;
     if (d_t_vec.size() == 1)
     {
-      d_t_vec[0] = new_t;
+      REAL *d_t_ptr = thrust::raw_pointer_cast(d_t_vec.data());
+      cudaMemcpyAsync(d_t_ptr, &t, sizeof(REAL), cudaMemcpyHostToDevice, exec_stream);
     }
-    t = new_t;
   }
 
   void initialize();
@@ -143,14 +144,6 @@ public:
     t = static_cast<REAL>(0.0);
     initialize();
   }
-
-  void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1);
-  std::vector<REAL> get_and_clear_fine_phi_dot_history();
-  std::vector<REAL> get_and_clear_fine_rugosity_history();
-
-  void accumulate_u_power_spectrum();
-  std::vector<REAL> get_averaged_u_power_spectrum() const;
-  void reset_spectrum_accumulator();
 
 private:
   NonlinearPart nonlinear_part;
@@ -180,16 +173,6 @@ private:
   bool graphCreated = false;
   size_t captured_steps = 0;
   REAL invN;
-
-  bool fine_tracking_enabled = false;
-  size_t tracking_sample_rate = 1;
-  unsigned int internal_step_counter = 0;
-
-  REAL_VECTOR d_phi_dot_history;
-  REAL_VECTOR d_rugosity_history;
-
-  REAL_VECTOR d_u_power_spectrum;
-  unsigned int spectrum_accumulations = 0;
 };
 
 template <typename N, typename I, typename L>
@@ -310,14 +293,6 @@ void gpu_pde_pseudospectral_stepper<N, I, L>::step_on_stream(cudaStream_t stream
       z_ptr, invN, n_modes);
 
   pseudospectral_detail::advance_time_kernel<<<1, 1, 0, stream>>>(d_t_ptr, dt);
-
-  if (fine_tracking_enabled && (internal_step_counter % tracking_sample_rate == 0))
-  {
-    // Place CUDA kernels or Thrust reductions here to compute mean_phidot
-    // and rugosity, and push them to d_phi_dot_history and d_rugosity_history.
-    // Note: If running inside a CUDA Graph, use pre-allocated buffers and atomic indices.
-  }
-  internal_step_counter++;
 }
 
 template <typename N, typename I, typename L>
@@ -405,84 +380,4 @@ void gpu_pde_pseudospectral_stepper<N, I, L>::run_block(size_t steps)
   cudaStreamSynchronize(exec_stream);
 
   t += dt * steps;
-}
-
-template <typename N, typename I, typename L>
-void gpu_pde_pseudospectral_stepper<N, I, L>::set_fine_tracking(bool enable, size_t sample_every_n_steps)
-{
-  fine_tracking_enabled = enable;
-  tracking_sample_rate = sample_every_n_steps;
-  if (!enable)
-  {
-    d_phi_dot_history.clear();
-    d_rugosity_history.clear();
-  }
-}
-
-template <typename N, typename I, typename L>
-std::vector<cuda_math::REAL> gpu_pde_pseudospectral_stepper<N, I, L>::get_and_clear_fine_phi_dot_history()
-{
-  std::vector<REAL> h(d_phi_dot_history.size());
-  if (!h.empty())
-  {
-    thrust::copy(d_phi_dot_history.begin(), d_phi_dot_history.end(), h.begin());
-    d_phi_dot_history.clear();
-  }
-  return h;
-}
-
-template <typename N, typename I, typename L>
-std::vector<cuda_math::REAL> gpu_pde_pseudospectral_stepper<N, I, L>::get_and_clear_fine_rugosity_history()
-{
-  std::vector<REAL> h(d_rugosity_history.size());
-  if (!h.empty())
-  {
-    thrust::copy(d_rugosity_history.begin(), d_rugosity_history.end(), h.begin());
-    d_rugosity_history.clear();
-  }
-  return h;
-}
-
-template <typename N, typename I, typename L>
-void gpu_pde_pseudospectral_stepper<N, I, L>::accumulate_u_power_spectrum()
-{
-  if (d_u_power_spectrum.size() != n_modes)
-  {
-    d_u_power_spectrum.assign(n_modes, 0.0);
-    spectrum_accumulations = 0;
-  }
-
-  REAL *spec_ptr = thrust::raw_pointer_cast(d_u_power_spectrum.data());
-  const COMPLEX *zhat_ptr = thrust::raw_pointer_cast(zhat_buf.data());
-
-  thrust::for_each(thrust::device, thrust::counting_iterator<size_t>(0), thrust::counting_iterator<size_t>(n_modes),
-                   [spec_ptr, zhat_ptr] __device__(size_t i)
-                   {
-                     COMPLEX val = zhat_ptr[i];
-                     spec_ptr[i] += (val.real() * val.real() + val.imag() * val.imag());
-                   });
-
-  spectrum_accumulations++;
-}
-
-template <typename N, typename I, typename L>
-std::vector<cuda_math::REAL> gpu_pde_pseudospectral_stepper<N, I, L>::get_averaged_u_power_spectrum() const
-{
-  std::vector<REAL> host_spec(d_u_power_spectrum.size());
-  if (spectrum_accumulations > 0)
-  {
-    thrust::copy(d_u_power_spectrum.begin(), d_u_power_spectrum.end(), host_spec.begin());
-    for (auto &val : host_spec)
-    {
-      val /= static_cast<REAL>(spectrum_accumulations);
-    }
-  }
-  return host_spec;
-}
-
-template <typename N, typename I, typename L>
-void gpu_pde_pseudospectral_stepper<N, I, L>::reset_spectrum_accumulator()
-{
-  d_u_power_spectrum.assign(n_modes, 0.0);
-  spectrum_accumulations = 0;
 }

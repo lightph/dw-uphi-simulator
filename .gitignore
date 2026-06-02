@@ -1,0 +1,54 @@
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+*.cu.o
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# CUDA specific
+*.ptx
+*.cubin
+*.fatbin
+
+# Build directories
+build/
+bin/
+obj/
+
+# Data files (customize as needed)
+*.dat
+*.csv
+*.h5
+*.txt
+# Local workspace and generated files
+compile_commands.json
+structure.txt
+
+# Doxygen documentation
+external/domain_wall_simulator/html/
+
+# Python compiled extensions
+*.so
+.cache/
+.clangd
+.vscode/

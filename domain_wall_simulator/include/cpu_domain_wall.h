@@ -180,35 +180,6 @@ public:
   FFTW_REAL get_alpha() const override { return alpha; }
   FFTW_REAL get_system_size() const override { return system_size; }
   size_t get_n_samples() const override { return n_samples; }
-  void set_fine_tracking(bool enable, size_t sample_every_n_steps = 1) override
-  {
-    stepper.set_fine_tracking(enable, sample_every_n_steps);
-  }
-
-  std::vector<FFTW_REAL> get_and_clear_fine_phi_dot_history() override
-  {
-    return stepper.get_and_clear_fine_phi_dot_history();
-  }
-
-  std::vector<FFTW_REAL> get_and_clear_fine_rugosity_history() override
-  {
-    return stepper.get_and_clear_fine_rugosity_history();
-  }
-
-  void accumulate_u_power_spectrum() override
-  {
-    stepper.accumulate_u_power_spectrum();
-  }
-
-  std::vector<FFTW_REAL> get_averaged_u_power_spectrum() const override
-  {
-    return stepper.get_averaged_u_power_spectrum();
-  }
-
-  void reset_spectrum_accumulator() override
-  {
-    stepper.reset_spectrum_accumulator();
-  }
 
 private:
   FFTW_REAL alpha, h, h0, Omega;

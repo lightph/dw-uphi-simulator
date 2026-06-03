@@ -39,7 +39,6 @@ obj/
 *.dat
 *.csv
 *.h5
-*.txt
 # Local workspace and generated files
 compile_commands.json
 structure.txt

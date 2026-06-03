@@ -216,6 +216,69 @@ public:
 
         return {mean_u, mean_phi, mean_phidot, rugosity};
     }
+    void set_fine_tracking(bool enable, size_t sample_rate = 1) override
+    {
+        fine_tracking_enabled = enable;
+        fine_sample_rate = sample_rate;
+        if (!enable)
+        {
+            host_fine_phi_dot_history.clear();
+            host_fine_rugosity_history.clear();
+            fine_step_counter = 0;
+        }
+    }
+
+    std::vector<SIM_REAL> get_and_clear_fine_phi_dot_history() override
+    {
+        std::vector<SIM_REAL> copy = std::move(host_fine_phi_dot_history);
+        host_fine_phi_dot_history.clear();
+        return copy;
+    }
+
+    std::vector<SIM_REAL> get_and_clear_fine_rugosity_history() override
+    {
+        std::vector<SIM_REAL> copy = std::move(host_fine_rugosity_history);
+        host_fine_rugosity_history.clear();
+        return copy;
+    }
+
+    void accumulate_u_power_spectrum() override
+    {
+        const auto &zhat = sim.get_zhat();
+        size_t n = zhat.size();
+        if (d_power_spectrum_acc.size() != n)
+        {
+            d_power_spectrum_acc.resize(n, 0.0);
+        }
+
+        AccumulateUPowerSpectrum functor{
+            thrust::raw_pointer_cast(zhat.data()),
+            thrust::raw_pointer_cast(d_power_spectrum_acc.data()),
+            n};
+
+        thrust::for_each(thrust::device, thrust::counting_iterator<size_t>(0), thrust::counting_iterator<size_t>(n), functor);
+        power_spectrum_count++;
+    }
+
+    std::vector<SIM_REAL> get_averaged_u_power_spectrum() const override
+    {
+        std::vector<SIM_REAL> h_acc(d_power_spectrum_acc.size());
+        thrust::copy(d_power_spectrum_acc.begin(), d_power_spectrum_acc.end(), h_acc.begin());
+
+        if (power_spectrum_count > 0)
+        {
+            SIM_REAL inv = 1.0 / power_spectrum_count;
+            for (auto &val : h_acc)
+                val *= inv;
+        }
+        return h_acc;
+    }
+
+    void reset_spectrum_accumulator() override
+    {
+        thrust::fill(d_power_spectrum_acc.begin(), d_power_spectrum_acc.end(), 0.0);
+        power_spectrum_count = 0;
+    }
 };
 
 std::unique_ptr<IDomainWallSimulator> create_gpu_simulator(const SimulatorConfig &cfg)

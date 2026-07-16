@@ -107,7 +107,7 @@ endif()
 # ==============================================================================
 # Programs
 # ==============================================================================
-set(PROGS h_sweep complete_h_sweep structure_analysis movie)
+set(PROGS h_sweep complete_h_sweep structure_analysis movie spectra_analysis scaling)
 foreach(prog IN LISTS PROGS)
     add_executable(${prog}${PREC_SUFFIX} programs/${prog}.cpp)
     target_link_libraries(${prog}${PREC_SUFFIX} PRIVATE simulator_core${PREC_SUFFIX})

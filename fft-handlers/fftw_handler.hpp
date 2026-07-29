@@ -268,4 +268,64 @@ class FftwHandlerC2CIn : public FftwBaseHandler {
     }
 };
 
+/// @brief Handler for out-of-place Complex-to-Complex 1D FFT.
+class FftwHandlerC2COut : public FftwBaseHandler {
+   private:
+    int current_sign_ = 0;
+
+   public:
+    void prepare(size_t N, bool measure = false) override { prepare_c2c(N, FFTW_FORWARD, measure); }
+
+    /// @brief Prepares the plan considering the direction of the transform.
+    void prepare_c2c(size_t N, int sign, bool measure = false) {
+        if (N == current_n_ && measure == current_measure_ && sign == current_sign_) return;
+        cleanup();
+        current_n_ = N;
+        current_measure_ = measure;
+        current_sign_ = sign;
+
+        unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
+
+        int threads_to_use = 1;
+#ifdef _OPENMP
+        threads_to_use = (N >= 16384) ? omp_get_max_threads() : 1;
+#endif
+        DW_FFTW_PLAN_WITH_NTHREADS(threads_to_use);
+
+        // Need separate dummy arrays for out-of-place planning
+        AlignedVector<Complex> dummy_in(current_n_);
+        AlignedVector<Complex> dummy_out(current_n_);
+
+        fft_plan_ = DW_FFTW_PLAN_DFT_1D(current_n_, reinterpret_cast<FftwComplex*>(dummy_in.data()),
+                                        reinterpret_cast<FftwComplex*>(dummy_out.data()),
+                                        current_sign_, flags);
+    }
+
+    /// @brief Executes the forward out-of-place Complex-to-Complex transform.
+    void do_fft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out,
+                bool measure = false) {
+        if (in.empty()) return;
+        size_t N = in.size();
+        if (out.size() != N) out.resize(N);
+
+        prepare_c2c(N, FFTW_FORWARD, measure);
+        DW_FFTW_EXECUTE_DFT(fft_plan_,
+                            reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
+                            reinterpret_cast<FftwComplex*>(out.data()));
+    }
+
+    /// @brief Executes the backward out-of-place Complex-to-Complex transform.
+    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out,
+                 bool measure = false) {
+        if (in.empty()) return;
+        size_t N = in.size();
+        if (out.size() != N) out.resize(N);
+
+        prepare_c2c(N, FFTW_BACKWARD, measure);
+        DW_FFTW_EXECUTE_DFT(fft_plan_,
+                            reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
+                            reinterpret_cast<FftwComplex*>(out.data()));
+    }
+};
+
 }  // namespace dw

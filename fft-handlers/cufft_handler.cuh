@@ -165,6 +165,40 @@ class CufftHandlerC2CIn : public CufftHandler {
     }
 };
 
+/// @brief cuFFT Handler for out-of-place Complex-to-Complex transforms.
+class CufftHandlerC2COut : public CufftHandler {
+   public:
+    void prepare(size_t N) override { createPlan(N, DW_CUFFT_C2C_PLAN); }
+
+    /// @brief Executes an out-of-place forward transform.
+    void do_fft(const DeviceVector<Complex>& in, DeviceVector<Complex>& out) {
+        if (in.empty()) return;
+        size_t N = in.size();
+        if (out.size() != N) out.resize(N);
+        prepare(N);
+
+        CUFFT_CHECK(DW_CUFFT_EXEC_C2C(
+            fft_plan_,
+            reinterpret_cast<CufftComplex*>(
+                const_cast<Complex*>(thrust::raw_pointer_cast(in.data()))),
+            reinterpret_cast<CufftComplex*>(thrust::raw_pointer_cast(out.data())), CUFFT_FORWARD));
+    }
+
+    /// @brief Executes an out-of-place inverse transform.
+    void do_ifft(const DeviceVector<Complex>& in, DeviceVector<Complex>& out) {
+        if (in.empty()) return;
+        size_t N = in.size();
+        if (out.size() != N) out.resize(N);
+        prepare(N);
+
+        CUFFT_CHECK(DW_CUFFT_EXEC_C2C(
+            fft_plan_,
+            reinterpret_cast<CufftComplex*>(
+                const_cast<Complex*>(thrust::raw_pointer_cast(in.data()))),
+            reinterpret_cast<CufftComplex*>(thrust::raw_pointer_cast(out.data())), CUFFT_INVERSE));
+    }
+};
+
 }  // namespace dw
 
 #endif  // HAS_CUDA

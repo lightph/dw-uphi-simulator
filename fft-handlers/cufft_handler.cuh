@@ -3,21 +3,12 @@
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>
 
+#include <utility>
+
+#include "cuda_utils.cuh"
 #include "types.hpp"
 
 #ifdef HAS_CUDA
-
-// Optional macro if you don't already have one defined globally
-#ifndef CUFFT_CHECK
-#define CUFFT_CHECK(call)                                                          \
-    do {                                                                           \
-        cufftResult err = call;                                                    \
-        if (err != CUFFT_SUCCESS) {                                                \
-            fprintf(stderr, "cuFFT error %d at %s:%d\n", err, __FILE__, __LINE__); \
-            exit(EXIT_FAILURE);                                                    \
-        }                                                                          \
-    } while (0)
-#endif
 
 namespace dw {
 
@@ -59,8 +50,27 @@ class CufftHandler {
 
     virtual ~CufftHandler() { cleanup(); }
 
+    // Disable copying
     CufftHandler(const CufftHandler&) = delete;
     CufftHandler& operator=(const CufftHandler&) = delete;
+
+    // Enable moving
+    CufftHandler(CufftHandler&& other) noexcept
+        : current_n_(other.current_n_), fft_plan_(other.fft_plan_) {
+        other.fft_plan_ = 0;
+        other.current_n_ = 0;
+    }
+
+    CufftHandler& operator=(CufftHandler&& other) noexcept {
+        if (this != &other) {
+            cleanup();
+            current_n_ = other.current_n_;
+            fft_plan_ = other.fft_plan_;
+            other.fft_plan_ = 0;
+            other.current_n_ = 0;
+        }
+        return *this;
+    }
 
     /// @brief Prepares the FFT plan for a specific size.
     virtual void prepare(size_t N) = 0;

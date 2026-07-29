@@ -3,7 +3,7 @@
 #include <thrust/execution_policy.h>
 #include <thrust/transform.h>
 
-#include "types.h"
+#include "types.hpp"
 
 #ifdef HAS_CUDA
 

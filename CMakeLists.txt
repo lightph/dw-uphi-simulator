@@ -55,6 +55,6 @@ endif()
 # ==========================================
 # Executable Targets
 # ==========================================
-add_executable(simulator src/main.cpp)
+add_executable(dummy src/main.cpp)
 
-target_link_libraries(simulator PRIVATE dw_core)
+target_link_libraries(dummy PRIVATE dw_core)

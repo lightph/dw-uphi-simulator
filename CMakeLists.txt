@@ -52,3 +52,9 @@ if(OpenMP_CXX_FOUND)
     target_link_libraries(dw_core INTERFACE OpenMP::OpenMP_CXX)
 endif()
 
+# ==========================================
+# Executable Targets
+# ==========================================
+add_executable(simulator src/main.cpp)
+
+target_link_libraries(simulator PRIVATE dw_core)

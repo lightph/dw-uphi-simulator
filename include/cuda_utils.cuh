@@ -1,7 +1,5 @@
 #pragma once
 
-#ifdef HAS_CUDA
-
 #include <cufft.h>
 
 #include <stdexcept>
@@ -17,5 +15,3 @@
         }                                                                                     \
     } while (0)
 #endif
-
-#endif  // HAS_CUDA

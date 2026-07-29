@@ -3,7 +3,8 @@
 #include <utility>
 #include <vector>
 
-#include "types.hpp"
+#include "aligned_memory.hpp"
+#include "fftw_precision.hpp"
 
 #ifdef _OPENMP
 #include <omp.h>
@@ -12,27 +13,61 @@
 namespace dw {
 
 // ==============================================================================
-// Precision Macros for FFTW
+// API Traits for FFTW (Replaces Preprocessor Macros)
 // ==============================================================================
-#ifdef DOUBLE_PRECISION
-#define DW_FFTW_PLAN_DFT_R2C_1D fftw_plan_dft_r2c_1d
-#define DW_FFTW_PLAN_DFT_C2R_1D fftw_plan_dft_c2r_1d
-#define DW_FFTW_PLAN_DFT_1D fftw_plan_dft_1d
-#define DW_FFTW_EXECUTE_DFT_R2C fftw_execute_dft_r2c
-#define DW_FFTW_EXECUTE_DFT_C2R fftw_execute_dft_c2r
-#define DW_FFTW_EXECUTE_DFT fftw_execute_dft
-#define DW_FFTW_PLAN_WITH_NTHREADS fftw_plan_with_nthreads
-#define DW_FFTW_DESTROY_PLAN fftw_destroy_plan
-#else
-#define DW_FFTW_PLAN_DFT_R2C_1D fftwf_plan_dft_r2c_1d
-#define DW_FFTW_PLAN_DFT_C2R_1D fftwf_plan_dft_c2r_1d
-#define DW_FFTW_PLAN_DFT_1D fftwf_plan_dft_1d
-#define DW_FFTW_EXECUTE_DFT_R2C fftwf_execute_dft_r2c
-#define DW_FFTW_EXECUTE_DFT_C2R fftwf_execute_dft_c2r
-#define DW_FFTW_EXECUTE_DFT fftwf_execute_dft
-#define DW_FFTW_PLAN_WITH_NTHREADS fftwf_plan_with_nthreads
-#define DW_FFTW_DESTROY_PLAN fftwf_destroy_plan
-#endif
+template <typename RealType>
+struct FftwApi;
+
+template <>
+struct FftwApi<float> {
+    using Plan = fftwf_plan;
+    static void plan_with_nthreads(int nthreads) { fftwf_plan_with_nthreads(nthreads); }
+    static Plan plan_dft_r2c_1d(int n, float* in, fftwf_complex* out, unsigned flags) {
+        return fftwf_plan_dft_r2c_1d(n, in, out, flags);
+    }
+    static Plan plan_dft_c2r_1d(int n, fftwf_complex* in, float* out, unsigned flags) {
+        return fftwf_plan_dft_c2r_1d(n, in, out, flags);
+    }
+    static Plan plan_dft_1d(int n, fftwf_complex* in, fftwf_complex* out, int sign,
+                            unsigned flags) {
+        return fftwf_plan_dft_1d(n, in, out, sign, flags);
+    }
+    static void execute_dft_r2c(Plan p, float* in, fftwf_complex* out) {
+        fftwf_execute_dft_r2c(p, in, out);
+    }
+    static void execute_dft_c2r(Plan p, fftwf_complex* in, float* out) {
+        fftwf_execute_dft_c2r(p, in, out);
+    }
+    static void execute_dft(Plan p, fftwf_complex* in, fftwf_complex* out) {
+        fftwf_execute_dft(p, in, out);
+    }
+    static void destroy_plan(Plan p) { fftwf_destroy_plan(p); }
+};
+
+template <>
+struct FftwApi<double> {
+    using Plan = fftw_plan;
+    static void plan_with_nthreads(int nthreads) { fftw_plan_with_nthreads(nthreads); }
+    static Plan plan_dft_r2c_1d(int n, double* in, fftw_complex* out, unsigned flags) {
+        return fftw_plan_dft_r2c_1d(n, in, out, flags);
+    }
+    static Plan plan_dft_c2r_1d(int n, fftw_complex* in, double* out, unsigned flags) {
+        return fftw_plan_dft_c2r_1d(n, in, out, flags);
+    }
+    static Plan plan_dft_1d(int n, fftw_complex* in, fftw_complex* out, int sign, unsigned flags) {
+        return fftw_plan_dft_1d(n, in, out, sign, flags);
+    }
+    static void execute_dft_r2c(Plan p, double* in, fftw_complex* out) {
+        fftw_execute_dft_r2c(p, in, out);
+    }
+    static void execute_dft_c2r(Plan p, fftw_complex* in, double* out) {
+        fftw_execute_dft_c2r(p, in, out);
+    }
+    static void execute_dft(Plan p, fftw_complex* in, fftw_complex* out) {
+        fftw_execute_dft(p, in, out);
+    }
+    static void destroy_plan(Plan p) { fftw_destroy_plan(p); }
+};
 
 /// @brief Utility functions for FFT operations.
 namespace FftwUtils {
@@ -61,17 +96,24 @@ inline size_t getOptimalSize(size_t min_size) {
 }  // namespace FftwUtils
 
 /// @brief Base class for FFTW plan management.
+template <typename Precision>
 class FftwBaseHandler {
    protected:
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+    using FftwReal = typename Precision::FftwReal;
+    using FftwComplex = typename Precision::FftwComplex;
+    using Plan = typename FftwApi<Real>::Plan;
+
     size_t current_n_ = 0;
     bool current_measure_ = false;
-    FftwPlan fft_plan_ = nullptr;
+    Plan fft_plan_ = nullptr;
     AlignedVector<Real> freqs_;
 
     /// @brief Destroys the current FFTW plan if it exists.
     virtual void destroyPlan() {
         if (fft_plan_) {
-            DW_FFTW_DESTROY_PLAN(fft_plan_);
+            FftwApi<Real>::destroy_plan(fft_plan_);
             fft_plan_ = nullptr;
         }
     }
@@ -139,13 +181,19 @@ class FftwBaseHandler {
 };
 
 /// @brief Handler for Real-to-Complex 1D FFT.
-class FftwHandlerR2C : public FftwBaseHandler {
+template <typename Precision>
+class FftwHandlerR2C : public FftwBaseHandler<Precision> {
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+    using FftwReal = typename Precision::FftwReal;
+    using FftwComplex = typename Precision::FftwComplex;
+
    public:
     void prepare(size_t N, bool measure = false) override {
-        if (N == current_n_ && measure == current_measure_) return;
-        cleanup();
-        current_n_ = N;
-        current_measure_ = measure;
+        if (N == this->current_n_ && measure == this->current_measure_) return;
+        this->cleanup();
+        this->current_n_ = N;
+        this->current_measure_ = measure;
 
         unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
 
@@ -153,15 +201,15 @@ class FftwHandlerR2C : public FftwBaseHandler {
 #ifdef _OPENMP
         threads_to_use = (N >= 16384) ? omp_get_max_threads() : 1;
 #endif
-        DW_FFTW_PLAN_WITH_NTHREADS(threads_to_use);
+        FftwApi<Real>::plan_with_nthreads(threads_to_use);
 
         // RAII Dummy arrays to prevent memory leaks during plan creation
-        AlignedVector<Real> dummy_in(current_n_);
-        AlignedVector<Complex> dummy_out(current_n_ / 2 + 1);
+        AlignedVector<Real> dummy_in(this->current_n_);
+        AlignedVector<Complex> dummy_out(this->current_n_ / 2 + 1);
 
-        fft_plan_ =
-            DW_FFTW_PLAN_DFT_R2C_1D(current_n_, reinterpret_cast<FftwReal*>(dummy_in.data()),
-                                    reinterpret_cast<FftwComplex*>(dummy_out.data()), flags);
+        this->fft_plan_ = FftwApi<Real>::plan_dft_r2c_1d(
+            static_cast<int>(this->current_n_), reinterpret_cast<FftwReal*>(dummy_in.data()),
+            reinterpret_cast<FftwComplex*>(dummy_out.data()), flags);
     }
 
     /// @brief Executes the forward Real-to-Complex transform.
@@ -173,21 +221,27 @@ class FftwHandlerR2C : public FftwBaseHandler {
         if (out.size() != out_size) out.resize(out_size);
         prepare(N, measure);
 
-        DW_FFTW_EXECUTE_DFT_R2C(fft_plan_,
-                                reinterpret_cast<FftwReal*>(const_cast<Real*>(in.data())),
-                                reinterpret_cast<FftwComplex*>(out.data()));
+        FftwApi<Real>::execute_dft_r2c(this->fft_plan_,
+                                       reinterpret_cast<FftwReal*>(const_cast<Real*>(in.data())),
+                                       reinterpret_cast<FftwComplex*>(out.data()));
     }
 };
 
 /// @brief Handler for Complex-to-Real 1D Inverse FFT.
 /// @note This leaves the output unnormalized. To recover magnitudes, divide by N.
-class FftwHandlerC2R : public FftwBaseHandler {
+template <typename Precision>
+class FftwHandlerC2R : public FftwBaseHandler<Precision> {
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+    using FftwReal = typename Precision::FftwReal;
+    using FftwComplex = typename Precision::FftwComplex;
+
    public:
     void prepare(size_t N, bool measure = false) override {
-        if (N == current_n_ && measure == current_measure_) return;
-        cleanup();
-        current_n_ = N;
-        current_measure_ = measure;
+        if (N == this->current_n_ && measure == this->current_measure_) return;
+        this->cleanup();
+        this->current_n_ = N;
+        this->current_measure_ = measure;
 
         unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
 
@@ -195,14 +249,14 @@ class FftwHandlerC2R : public FftwBaseHandler {
 #ifdef _OPENMP
         threads_to_use = (N >= 16384) ? omp_get_max_threads() : 1;
 #endif
-        DW_FFTW_PLAN_WITH_NTHREADS(threads_to_use);
+        FftwApi<Real>::plan_with_nthreads(threads_to_use);
 
-        AlignedVector<Complex> dummy_in(current_n_ / 2 + 1);
-        AlignedVector<Real> dummy_out(current_n_);
+        AlignedVector<Complex> dummy_in(this->current_n_ / 2 + 1);
+        AlignedVector<Real> dummy_out(this->current_n_);
 
-        fft_plan_ =
-            DW_FFTW_PLAN_DFT_C2R_1D(current_n_, reinterpret_cast<FftwComplex*>(dummy_in.data()),
-                                    reinterpret_cast<FftwReal*>(dummy_out.data()), flags);
+        this->fft_plan_ = FftwApi<Real>::plan_dft_c2r_1d(
+            static_cast<int>(this->current_n_), reinterpret_cast<FftwComplex*>(dummy_in.data()),
+            reinterpret_cast<FftwReal*>(dummy_out.data()), flags);
     }
 
     /// @brief Executes the backward Complex-to-Real transform.
@@ -213,14 +267,19 @@ class FftwHandlerC2R : public FftwBaseHandler {
         if (out.size() != expected_N) out.resize(expected_N);
         prepare(expected_N, measure);
 
-        DW_FFTW_EXECUTE_DFT_C2R(fft_plan_,
-                                reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
-                                reinterpret_cast<FftwReal*>(out.data()));
+        FftwApi<Real>::execute_dft_c2r(
+            this->fft_plan_, reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
+            reinterpret_cast<FftwReal*>(out.data()));
     }
 };
 
 /// @brief Handler for in-place Complex-to-Complex 1D FFT.
-class FftwHandlerC2CIn : public FftwBaseHandler {
+template <typename Precision>
+class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+    using FftwComplex = typename Precision::FftwComplex;
+
    private:
     int current_sign_ = 0;
 
@@ -229,10 +288,11 @@ class FftwHandlerC2CIn : public FftwBaseHandler {
 
     /// @brief Prepares the plan considering the direction of the transform.
     void prepare_c2c(size_t N, int sign, bool measure = false) {
-        if (N == current_n_ && measure == current_measure_ && sign == current_sign_) return;
-        cleanup();
-        current_n_ = N;
-        current_measure_ = measure;
+        if (N == this->current_n_ && measure == this->current_measure_ && sign == current_sign_)
+            return;
+        this->cleanup();
+        this->current_n_ = N;
+        this->current_measure_ = measure;
         current_sign_ = sign;
 
         unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
@@ -241,21 +301,21 @@ class FftwHandlerC2CIn : public FftwBaseHandler {
 #ifdef _OPENMP
         threads_to_use = (N >= 16384) ? omp_get_max_threads() : 1;
 #endif
-        DW_FFTW_PLAN_WITH_NTHREADS(threads_to_use);
+        FftwApi<Real>::plan_with_nthreads(threads_to_use);
 
-        AlignedVector<Complex> dummy(current_n_);
+        AlignedVector<Complex> dummy(this->current_n_);
 
-        fft_plan_ =
-            DW_FFTW_PLAN_DFT_1D(current_n_, reinterpret_cast<FftwComplex*>(dummy.data()),
-                                reinterpret_cast<FftwComplex*>(dummy.data()), current_sign_, flags);
+        this->fft_plan_ = FftwApi<Real>::plan_dft_1d(
+            static_cast<int>(this->current_n_), reinterpret_cast<FftwComplex*>(dummy.data()),
+            reinterpret_cast<FftwComplex*>(dummy.data()), current_sign_, flags);
     }
 
     /// @brief Executes the forward in-place Complex-to-Complex transform.
     void do_fft(AlignedVector<Complex>& inout, bool measure = false) {
         if (inout.empty()) return;
         prepare_c2c(inout.size(), FFTW_FORWARD, measure);
-        DW_FFTW_EXECUTE_DFT(fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
-                            reinterpret_cast<FftwComplex*>(inout.data()));
+        FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
+                                   reinterpret_cast<FftwComplex*>(inout.data()));
     }
 
     /// @brief Executes the backward in-place Complex-to-Complex transform.
@@ -263,13 +323,18 @@ class FftwHandlerC2CIn : public FftwBaseHandler {
     void do_ifft(AlignedVector<Complex>& inout, bool measure = false) {
         if (inout.empty()) return;
         prepare_c2c(inout.size(), FFTW_BACKWARD, measure);
-        DW_FFTW_EXECUTE_DFT(fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
-                            reinterpret_cast<FftwComplex*>(inout.data()));
+        FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
+                                   reinterpret_cast<FftwComplex*>(inout.data()));
     }
 };
 
 /// @brief Handler for out-of-place Complex-to-Complex 1D FFT.
-class FftwHandlerC2COut : public FftwBaseHandler {
+template <typename Precision>
+class FftwHandlerC2COut : public FftwBaseHandler<Precision> {
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+    using FftwComplex = typename Precision::FftwComplex;
+
    private:
     int current_sign_ = 0;
 
@@ -278,10 +343,11 @@ class FftwHandlerC2COut : public FftwBaseHandler {
 
     /// @brief Prepares the plan considering the direction of the transform.
     void prepare_c2c(size_t N, int sign, bool measure = false) {
-        if (N == current_n_ && measure == current_measure_ && sign == current_sign_) return;
-        cleanup();
-        current_n_ = N;
-        current_measure_ = measure;
+        if (N == this->current_n_ && measure == this->current_measure_ && sign == current_sign_)
+            return;
+        this->cleanup();
+        this->current_n_ = N;
+        this->current_measure_ = measure;
         current_sign_ = sign;
 
         unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
@@ -290,15 +356,15 @@ class FftwHandlerC2COut : public FftwBaseHandler {
 #ifdef _OPENMP
         threads_to_use = (N >= 16384) ? omp_get_max_threads() : 1;
 #endif
-        DW_FFTW_PLAN_WITH_NTHREADS(threads_to_use);
+        FftwApi<Real>::plan_with_nthreads(threads_to_use);
 
         // Need separate dummy arrays for out-of-place planning
-        AlignedVector<Complex> dummy_in(current_n_);
-        AlignedVector<Complex> dummy_out(current_n_);
+        AlignedVector<Complex> dummy_in(this->current_n_);
+        AlignedVector<Complex> dummy_out(this->current_n_);
 
-        fft_plan_ = DW_FFTW_PLAN_DFT_1D(current_n_, reinterpret_cast<FftwComplex*>(dummy_in.data()),
-                                        reinterpret_cast<FftwComplex*>(dummy_out.data()),
-                                        current_sign_, flags);
+        this->fft_plan_ = FftwApi<Real>::plan_dft_1d(
+            static_cast<int>(this->current_n_), reinterpret_cast<FftwComplex*>(dummy_in.data()),
+            reinterpret_cast<FftwComplex*>(dummy_out.data()), current_sign_, flags);
     }
 
     /// @brief Executes the forward out-of-place Complex-to-Complex transform.
@@ -309,9 +375,9 @@ class FftwHandlerC2COut : public FftwBaseHandler {
         if (out.size() != N) out.resize(N);
 
         prepare_c2c(N, FFTW_FORWARD, measure);
-        DW_FFTW_EXECUTE_DFT(fft_plan_,
-                            reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
-                            reinterpret_cast<FftwComplex*>(out.data()));
+        FftwApi<Real>::execute_dft(this->fft_plan_,
+                                   reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
+                                   reinterpret_cast<FftwComplex*>(out.data()));
     }
 
     /// @brief Executes the backward out-of-place Complex-to-Complex transform.
@@ -322,9 +388,9 @@ class FftwHandlerC2COut : public FftwBaseHandler {
         if (out.size() != N) out.resize(N);
 
         prepare_c2c(N, FFTW_BACKWARD, measure);
-        DW_FFTW_EXECUTE_DFT(fft_plan_,
-                            reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
-                            reinterpret_cast<FftwComplex*>(out.data()));
+        FftwApi<Real>::execute_dft(this->fft_plan_,
+                                   reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
+                                   reinterpret_cast<FftwComplex*>(out.data()));
     }
 };
 

@@ -1,60 +1,106 @@
 cmake_minimum_required(VERSION 3.20)
 project(DomainWallSimulator LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# ==========================================
-# Build Options
-# ==========================================
-option(USE_CUDA "Enable CUDA support" ON)
-option(DOUBLE_PRECISION "Use double precision instead of single precision" OFF)
+# ==============================================================================
+# Output Directories
+# ==============================================================================
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
-# Set CUDA architectures. "native" detects the GPU on the current build machine.
-# This can be overridden at configure time: -DCMAKE_CUDA_ARCHITECTURES="75;80;86"
-set(CMAKE_CUDA_ARCHITECTURES "native" CACHE STRING "CUDA architectures to build for")
+# ==============================================================================
+# Build Options
+# ==============================================================================
+option(USE_CUDA "Enable CUDA support" ON)
+option(USE_DOUBLE_PRECISION "Use double precision (ON) or single precision (OFF)" OFF)
+
+# ==============================================================================
+# Language and Flags
+# ==============================================================================
+if(USE_CUDA)
+    include(CheckLanguage)
+    check_language(CUDA)
+    if(CMAKE_CUDA_COMPILER)
+        enable_language(CUDA)
+        
+        # Consistent with your reference but exposed as a cache string for flexibility
+        set(CMAKE_CUDA_ARCHITECTURES 52 60 61 70 75 80 86 CACHE STRING "CUDA architectures to build for")
+        
+        # Add the extended lambda flag
+        set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --extended-lambda")
+        
+        message(STATUS ">>> CUDA enabled (Archs: ${CMAKE_CUDA_ARCHITECTURES})")
+    else()
+        set(USE_CUDA OFF)
+        message(WARNING ">>> CUDA compiler not found. Falling back to CPU-only build.")
+    endif()
+endif()
+
+# ==============================================================================
+# Precision Configuration
+# ==============================================================================
+if(USE_DOUBLE_PRECISION)
+    set(PREC_SUFFIX "_dp")
+    set(FFTW_PKG "fftw3")
+    set(FFTW_OMP_LIB "fftw3_omp")
+else()
+    set(PREC_SUFFIX "_sp")
+    set(FFTW_PKG "fftw3f")
+    set(FFTW_OMP_LIB "fftw3f_omp")
+endif()
+message(STATUS ">>> Building with precision: ${PREC_SUFFIX}")
+
+# ==============================================================================
+# Dependencies
+# ==============================================================================
+find_program(CCACHE_PROGRAM ccache)
+if(CCACHE_PROGRAM)
+    set(CMAKE_CXX_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+    set(CMAKE_CUDA_COMPILER_LAUNCHER "${CCACHE_PROGRAM}")
+endif()
+
+find_package(PkgConfig REQUIRED)
+find_package(Threads REQUIRED)
+find_package(OpenMP REQUIRED COMPONENTS CXX)
+pkg_check_modules(FFTW3 REQUIRED ${FFTW_PKG})
 
 if(USE_CUDA)
-    enable_language(CUDA)
     find_package(CUDAToolkit REQUIRED)
 endif()
 
-find_package(OpenMP)
-
-find_library(FFTW3_LIB NAMES fftw3 REQUIRED)
-find_library(FFTW3F_LIB NAMES fftw3f REQUIRED)
-find_path(FFTW3_INCLUDE_DIR NAMES fftw3.h REQUIRED)
-
-# ==========================================
-# Core Library Target
-# ==========================================
+# ==============================================================================
+# Core Header-Only Library Target
+# ==============================================================================
 add_library(dw_core INTERFACE)
 
-# Include directories
 target_include_directories(dw_core INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/fft-handlers>
-    ${FFTW3_INCLUDE_DIR}
+    ${FFTW3_INCLUDE_DIRS}
 )
 
-if(DOUBLE_PRECISION)
+target_link_libraries(dw_core INTERFACE 
+    ${FFTW3_LIBRARIES} 
+    ${FFTW_OMP_LIB}
+    Threads::Threads
+    OpenMP::OpenMP_CXX
+)
+
+if(USE_DOUBLE_PRECISION)
     target_compile_definitions(dw_core INTERFACE DOUBLE_PRECISION)
-    target_link_libraries(dw_core INTERFACE ${FFTW3_LIB})
-else()
-    target_link_libraries(dw_core INTERFACE ${FFTW3F_LIB})
 endif()
 
 if(USE_CUDA)
     target_compile_definitions(dw_core INTERFACE HAS_CUDA)
-    target_link_libraries(dw_core INTERFACE CUDA::cufft)
+    target_link_libraries(dw_core INTERFACE CUDA::cudart CUDA::cufft)
 endif()
 
-if(OpenMP_CXX_FOUND)
-    target_link_libraries(dw_core INTERFACE OpenMP::OpenMP_CXX)
-endif()
-
-# ==========================================
+# ==============================================================================
 # Executable Targets
-# ==========================================
-add_executable(dummy src/main.cpp)
-
-target_link_libraries(dummy PRIVATE dw_core)
+# ==============================================================================
+add_executable(dummy${PREC_SUFFIX} src/main.cpp)
+target_link_libraries(dummy${PREC_SUFFIX} PRIVATE dw_core)

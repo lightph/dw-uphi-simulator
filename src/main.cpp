@@ -1,6 +1,6 @@
 #include <iostream>
 
-#include "fftw_handler.hpp"  // Or whatever you named the header
+#include "fftw_handler.h"
 #include "types.h"
 
 int main() {

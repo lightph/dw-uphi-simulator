@@ -24,3 +24,14 @@ Because `dw_core` is header-only, you do not need to build it as a shared or sta
 # Example integration
 add_executable(my_simulation main.cpp)
 target_link_libraries(my_simulation PRIVATE dw_core)
+```
+
+## Implementation Notes
+
+### FFT Normalization
+The FFT handlers wrap the underlying C APIs closely for maximum performance. Consequently, forward and inverse transforms are **unnormalized**. 
+
+If you perform a forward transform followed immediately by an inverse transform, the resulting data will be scaled by a factor of `N` (the logical size of the array). The calling application is responsible for dividing the output by `N` to recover the original magnitudes.
+
+### Thread Safety and Plans
+FFTW and cuFFT plan generation is not inherently thread-safe. Plans should be prepared and managed by a single thread before executing the transforms in parallel or on a CUDA stream.

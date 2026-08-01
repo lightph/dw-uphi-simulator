@@ -26,6 +26,27 @@ struct CpuBackend {
         }
     }
     static void synchronize() { return; }
+    static void evaluate_nonlinear(const ComplexVector& z, ComplexVector& nl_out, Real alpha,
+                                   Real h_val) {
+        Complex prefactor(alpha / Real(2.0), Real(-1.0) / Real(2.0));
+
+#pragma omp parallel for
+        for (std::size_t j = 0; j < z.size(); ++j) {
+            Real phi = -z[j].imag();
+            Complex bracket(alpha * h_val, std::sin(Real(2.0) * phi));
+            nl_out[j] = prefactor * bracket;
+        }
+    }
+
+    static void step_linear(ComplexVector& z_hat, const ComplexVector& nl_hat,
+                            const Complex* prop_z, const Complex* prop_nl) {
+        Real norm_factor = Real(1.0) / static_cast<Real>(z_hat.size());
+
+#pragma omp parallel for
+        for (std::size_t j = 0; j < z_hat.size(); ++j) {
+            z_hat[j] = (prop_z[j] * z_hat[j] + prop_nl[j] * nl_hat[j]) * norm_factor;
+        }
+    }
 };
 
 }  // namespace dw

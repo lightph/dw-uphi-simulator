@@ -16,6 +16,16 @@ struct CpuBackend {
     using C2R = FftwHandlerC2R<Precision>;
     using C2CIn = FftwHandlerC2CIn<Precision>;
     using C2COut = FftwHandlerC2COut<Precision>;
+
+    static void compute_difference(const typename Precision::Complex* u,
+                                   const typename Precision::Complex* u_prev,
+                                   typename Precision::Complex* delta, std::size_t size) {
+#pragma omp parallel for
+        for (std::size_t i = 0; i < size; ++i) {
+            delta[i] = u[i] - u_prev[i];
+        }
+    }
+    static void synchronize() { return; }
 };
 
 }  // namespace dw

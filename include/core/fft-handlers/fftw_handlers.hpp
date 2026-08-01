@@ -189,7 +189,7 @@ class FftwHandlerR2C : public FftwBaseHandler<Precision> {
     using FftwComplex = typename Precision::FftwComplex;
 
    public:
-    void prepare(size_t N, bool measure = false) override {
+    void prepare(size_t N, bool measure = true) override {
         if (N == this->current_n_ && measure == this->current_measure_) return;
         this->cleanup();
         this->current_n_ = N;
@@ -237,7 +237,7 @@ class FftwHandlerC2R : public FftwBaseHandler<Precision> {
     using FftwComplex = typename Precision::FftwComplex;
 
    public:
-    void prepare(size_t N, bool measure = false) override {
+    void prepare(size_t N, bool measure = true) override {
         if (N == this->current_n_ && measure == this->current_measure_) return;
         this->cleanup();
         this->current_n_ = N;
@@ -260,7 +260,7 @@ class FftwHandlerC2R : public FftwBaseHandler<Precision> {
     }
 
     /// @brief Executes the backward Complex-to-Real transform.
-    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Real>& out, bool measure = false) {
+    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Real>& out, bool measure = true) {
         if (in.empty()) return;
         size_t expected_N = (in.size() - 1) * 2;
 
@@ -284,10 +284,10 @@ class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
     int current_sign_ = 0;
 
    public:
-    void prepare(size_t N, bool measure = false) override { prepare_c2c(N, FFTW_FORWARD, measure); }
+    void prepare(size_t N, bool measure = true) override { prepare_c2c(N, FFTW_FORWARD, measure); }
 
     /// @brief Prepares the plan considering the direction of the transform.
-    void prepare_c2c(size_t N, int sign, bool measure = false) {
+    void prepare_c2c(size_t N, int sign, bool measure = true) {
         if (N == this->current_n_ && measure == this->current_measure_ && sign == current_sign_)
             return;
         this->cleanup();
@@ -311,7 +311,7 @@ class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
     }
 
     /// @brief Executes the forward in-place Complex-to-Complex transform.
-    void do_fft(AlignedVector<Complex>& inout, bool measure = false) {
+    void do_fft(AlignedVector<Complex>& inout, bool measure = true) {
         if (inout.empty()) return;
         prepare_c2c(inout.size(), FFTW_FORWARD, measure);
         FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
@@ -320,7 +320,7 @@ class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
 
     /// @brief Executes the backward in-place Complex-to-Complex transform.
     /// @note This leaves the output unnormalized. To recover magnitudes, divide by N.
-    void do_ifft(AlignedVector<Complex>& inout, bool measure = false) {
+    void do_ifft(AlignedVector<Complex>& inout, bool measure = true) {
         if (inout.empty()) return;
         prepare_c2c(inout.size(), FFTW_BACKWARD, measure);
         FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
@@ -339,10 +339,10 @@ class FftwHandlerC2COut : public FftwBaseHandler<Precision> {
     int current_sign_ = 0;
 
    public:
-    void prepare(size_t N, bool measure = false) override { prepare_c2c(N, FFTW_FORWARD, measure); }
+    void prepare(size_t N, bool measure = true) override { prepare_c2c(N, FFTW_FORWARD, measure); }
 
     /// @brief Prepares the plan considering the direction of the transform.
-    void prepare_c2c(size_t N, int sign, bool measure = false) {
+    void prepare_c2c(size_t N, int sign, bool measure = true) {
         if (N == this->current_n_ && measure == this->current_measure_ && sign == current_sign_)
             return;
         this->cleanup();

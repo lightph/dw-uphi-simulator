@@ -105,15 +105,18 @@ struct GpuBackend {
                                    Real h_val) {
         int blockSize = 256;
         int numBlocks = (z.size() + blockSize - 1) / blockSize;
-        nonlinear_kernel<<<numBlocks, blockSize>>>(z.data(), nl_out.data(), alpha, h_val, z.size());
+
+        nonlinear_kernel<Real, Complex>
+            <<<numBlocks, blockSize>>>(z.data(), nl_out.data(), alpha, h_val, z.size());
     }
 
     static void step_linear(ComplexVector& z_hat, const ComplexVector& nl_hat,
                             const Complex* prop_z, const Complex* prop_nl) {
         int blockSize = 256;
         int numBlocks = (z_hat.size() + blockSize - 1) / blockSize;
-        linear_kernel<<<numBlocks, blockSize>>>(z_hat.data(), nl_hat.data(), prop_z, prop_nl,
-                                                z_hat.size());
+
+        linear_kernel<Real, Complex>
+            <<<numBlocks, blockSize>>>(z_hat.data(), nl_hat.data(), prop_z, prop_nl, z_hat.size());
     }
 
     static void copy(const ComplexVector& src, ComplexVector& dst) {

@@ -11,6 +11,10 @@ template <typename Precision>
 struct CpuBackend {
     using PrecisionType = Precision;
 
+    using PrecisionType = Precision;
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+
     using R2C = FftwHandlerR2C<Precision>;
     using C2R = FftwHandlerC2R<Precision>;
     using C2CIn = FftwHandlerC2CIn<Precision>;

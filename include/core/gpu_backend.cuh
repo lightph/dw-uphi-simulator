@@ -78,6 +78,10 @@ template <typename Precision>
 struct GpuBackend {
     using PrecisionType = Precision;
 
+    using PrecisionType = Precision;
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+
     template <typename T>
     using Vector = CudaVector<T>;
 
@@ -85,6 +89,7 @@ struct GpuBackend {
     using C2R = CufftHandlerC2R<Precision>;
     using C2CIn = CufftHandlerC2CIn<Precision>;
     using C2COut = CufftHandlerC2COut<Precision>;
+    using ComplexVector = Vector<Complex>;
 
     static void compute_difference(const typename Precision::Complex* u,
                                    const typename Precision::Complex* u_prev,

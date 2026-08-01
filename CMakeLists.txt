@@ -15,7 +15,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # ==============================================================================
 # Language and Flags
 # ==============================================================================
-set(CMAKE_CUDA_ARCHITECTURES 52 60 61 70 75 80 86 CACHE STRING "CUDA architectures to build for")
+set(CMAKE_CUDA_ARCHITECTURES  60 61 70 75 80 86 CACHE STRING "CUDA architectures to build for")
 enable_language(CUDA)
 add_compile_options("$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>")
 

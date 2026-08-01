@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vector>
+
 #include "aligned_memory.hpp"
 #include "fftw_handlers.hpp"
 
@@ -9,13 +11,15 @@ template <typename Precision>
 struct CpuBackend {
     using PrecisionType = Precision;
 
-    template <typename T>
-    using Vector = AlignedVector<T>;
-
     using R2C = FftwHandlerR2C<Precision>;
     using C2R = FftwHandlerC2R<Precision>;
     using C2CIn = FftwHandlerC2CIn<Precision>;
     using C2COut = FftwHandlerC2COut<Precision>;
+
+    template <typename T>
+    using Vector = AlignedVector<T>;
+
+    using ComplexVector = Vector<Complex>;
 
     static void compute_difference(const typename Precision::Complex* u,
                                    const typename Precision::Complex* u_prev,

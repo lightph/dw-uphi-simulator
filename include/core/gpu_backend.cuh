@@ -4,6 +4,8 @@
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform_reduce.h>
 
+#include <cmath>
+
 #include "cuda_memory.cuh"
 #include "cufft_handlers.cuh"
 
@@ -78,7 +80,6 @@ template <typename Precision>
 struct GpuBackend {
     using PrecisionType = Precision;
 
-    using PrecisionType = Precision;
     using Real = typename Precision::Real;
     using Complex = typename Precision::Complex;
 
@@ -89,7 +90,7 @@ struct GpuBackend {
     using C2R = CufftHandlerC2R<Precision>;
     using C2CIn = CufftHandlerC2CIn<Precision>;
     using C2COut = CufftHandlerC2COut<Precision>;
-    using ComplexVector = Vector<Complex>;
+    using ComplexVector = CudaVector<Complex>;
 
     static void compute_difference(const typename Precision::Complex* u,
                                    const typename Precision::Complex* u_prev,

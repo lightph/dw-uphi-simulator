@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <vector>
 
 #include "aligned_memory.hpp"
@@ -11,7 +12,6 @@ template <typename Precision>
 struct CpuBackend {
     using PrecisionType = Precision;
 
-    using PrecisionType = Precision;
     using Real = typename Precision::Real;
     using Complex = typename Precision::Complex;
 
@@ -23,7 +23,7 @@ struct CpuBackend {
     template <typename T>
     using Vector = AlignedVector<T>;
 
-    using ComplexVector = Vector<Complex>;
+    using ComplexVector = AlignedVector<Complex>;
 
     static void compute_difference(const typename Precision::Complex* u,
                                    const typename Precision::Complex* u_prev,

@@ -15,9 +15,9 @@
 
 // Provided backend and precision headers
 #include "cpu_backend.hpp"
-#include "cuda_precision.hpp"
+#include "cuda_precision.cuh"
 #include "fftw_precision.hpp"
-#include "gpu_backend.hpp"
+#include "gpu_backend.cuh"
 
 namespace dw {
 

@@ -30,8 +30,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # Language and Flags
 # ==============================================================================
 # 4. Target "native" architecture by default to massively reduce compile times
-set(CMAKE_CUDA_ARCHITECTURES "native" CACHE STRING "CUDA architectures to build for")
-
+ set(CMAKE_CUDA_ARCHITECTURES  60 61 70 75 80 86 CACHE STRING "CUDA architectures to build for") 
 # 5. Add fast-math for Release builds to increase instruction throughput
 add_compile_options(
     "$<$<COMPILE_LANGUAGE:CUDA>:--extended-lambda>"

@@ -47,6 +47,20 @@ struct CpuBackend {
             z_hat[j] = (prop_z[j] * z_hat[j] + prop_nl[j] * nl_hat[j]) * norm_factor;
         }
     }
+
+    static void copy(const ComplexVector& src, ComplexVector& dst) { dst = src; }
+
+    static Real compute_diff_sq(const ComplexVector& u1, const ComplexVector& u2) {
+        Real sum = 0.0;
+
+#pragma omp parallel for reduction(+ : sum)
+        for (std::size_t i = 0; i < u1.size(); ++i) {
+            Real dr = u1[i].real() - u2[i].real();
+            Real di = u1[i].imag() - u2[i].imag();
+            sum += dr * dr + di * di;
+        }
+        return sum;
+    }
 };
 
 }  // namespace dw

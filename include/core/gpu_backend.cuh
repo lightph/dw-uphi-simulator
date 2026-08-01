@@ -1,5 +1,9 @@
 #pragma once
 
+#include <thrust/device_ptr.h>
+#include <thrust/iterator/zip_iterator.h>
+#include <thrust/transform_reduce.h>
+
 #include "cuda_memory.cuh"
 #include "cufft_handlers.cuh"
 
@@ -36,6 +40,18 @@ __global__ void linear_kernel(Complex* z_hat, const Complex* nl_hat, const Compl
     }
 }
 
+template <typename Real, typename Complex>
+struct DiffSqFunctor {
+    template <typename Tuple>
+    __host__ __device__ Real operator()(const Tuple& t) const {
+        Complex a = thrust::get<0>(t);
+        Complex b = thrust::get<1>(t);
+        Real dr = a.real() - b.real();
+        Real di = a.imag() - b.imag();
+        return dr * dr + di * di;
+    }
+};
+
 template <typename Precision>
 struct GpuBackend {
     using PrecisionType = Precision;
@@ -70,6 +86,22 @@ struct GpuBackend {
         int numBlocks = (z_hat.size() + blockSize - 1) / blockSize;
         linear_kernel<<<numBlocks, blockSize>>>(z_hat.data(), nl_hat.data(), prop_z, prop_nl,
                                                 z_hat.size());
+    }
+
+    static void copy(const ComplexVector& src, ComplexVector& dst) {
+        cudaMemcpy(dst.data(), src.data(), src.size() * sizeof(Complex), cudaMemcpyDeviceToDevice);
+    }
+
+    static Real compute_diff_sq(const ComplexVector& u1, const ComplexVector& u2) {
+        thrust::device_ptr<const Complex> ptr1(u1.data());
+        thrust::device_ptr<const Complex> ptr2(u2.data());
+
+        auto start = thrust::make_zip_iterator(thrust::make_tuple(ptr1, ptr2));
+        auto end =
+            thrust::make_zip_iterator(thrust::make_tuple(ptr1 + u1.size(), ptr2 + u1.size()));
+
+        DiffSqFunctor<Real, Complex> functor;
+        return thrust::transform_reduce(start, end, functor, Real(0.0), thrust::plus<Real>());
     }
 };
 

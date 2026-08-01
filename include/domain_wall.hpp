@@ -40,40 +40,17 @@ class DomainWall {
         initialize_state();
     }
 
-    void run(const std::string& output_file, unsigned long long max_steps = 1ULL << 20) {
-        std::ofstream out(output_file);
-        out << std::setprecision(std::numeric_limits<Real>::max_digits10);
+    void step(Real& current_time) {
+        NonlinearEvaluator nonlin{alpha_, h0_, ha_, omega_, current_time};
+        LinearStepper lin{prop_z_.data(), prop_nl_.data()};
 
-        Real current_time = 0.0;
-        unsigned long long step_count = 1;
-        unsigned long long target_step = 2;
-        int n = 1;
-
-        const Complex* d_prop_z = prop_z_.data();
-        const Complex* d_prop_nl = prop_nl_.data();
-
-        while (step_count <= max_steps) {
-            NonlinearEvaluator nonlin{alpha_, h0_, ha_, omega_, current_time};
-            LinearStepper lin{d_prop_z, d_prop_nl};
-
-            stepper_.step(state_, dt_, lin, nonlin);
-            current_time += dt_;
-
-            if (step_count == target_step) {
-                Backend::synchronize();
-
-                out << "n=" << n << " step=" << step_count << " t=" << current_time << "\n";
-                for (std::size_t i = 0; i < size_; ++i) {
-                    out << state_.u[i].real() << " " << -state_.u[i].imag() << "\n";
-                }
-
-                n++;
-                target_step = 1ULL << n;
-            }
-            step_count++;
-        }
-        out.close();
+        stepper_.step(state_, dt_, lin, nonlin);
+        current_time += dt_;
     }
+
+    const State<Backend>& get_state() const { return state_; }
+    std::size_t get_size() const { return size_; }
+    Real get_dt() const { return dt_; }
 
    private:
     std::size_t size_;

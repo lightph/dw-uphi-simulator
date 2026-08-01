@@ -15,8 +15,8 @@
 #include "stepper.hpp"
 
 #ifdef HAS_CUDA
-#include "cuda_precision.hpp"
-#include "gpu_backend.hpp"
+#include "cuda_precision.cuh"
+#include "gpu_backend.cuh"
 #endif
 
 namespace dw {

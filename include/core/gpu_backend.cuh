@@ -9,6 +9,28 @@
 
 namespace dw {
 
+template <typename Real>
+struct ObsTuple {
+    Real sin2phi, u, u2;
+};
+
+template <typename Real, typename Complex>
+struct ObsFunctor {
+    __host__ __device__ ObsTuple<Real> operator()(const Complex& z) const {
+        Real u = z.real();
+        Real phi = -z.imag();
+        return {std::sin(Real(2.0) * phi), u, u * u};
+    }
+};
+
+template <typename Real>
+struct ObsReduce {
+    __host__ __device__ ObsTuple<Real> operator()(const ObsTuple<Real>& a,
+                                                  const ObsTuple<Real>& b) const {
+        return {a.sin2phi + b.sin2phi, a.u + b.u, a.u2 + b.u2};
+    }
+};
+
 template <typename Complex>
 __global__ void compute_difference_kernel(const Complex* u, const Complex* u_prev, Complex* delta,
                                           std::size_t size) {
@@ -102,6 +124,15 @@ struct GpuBackend {
 
         DiffSqFunctor<Real, Complex> functor;
         return thrust::transform_reduce(start, end, functor, Real(0.0), thrust::plus<Real>());
+    }
+
+    static ObsTuple<Real> compute_observables(const ComplexVector& z) {
+        thrust::device_ptr<const Complex> ptr(z.data());
+        ObsFunctor<Real, Complex> transform_op;
+        ObsReduce<Real> reduce_op;
+        ObsTuple<Real> init = {Real(0.0), Real(0.0), Real(0.0)};
+
+        return thrust::transform_reduce(ptr, ptr + z.size(), transform_op, init, reduce_op);
     }
 };
 

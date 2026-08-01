@@ -61,6 +61,24 @@ struct CpuBackend {
         }
         return sum;
     }
+
+    struct ObsTuple {
+        Real sin2phi, u, u2;
+    };
+
+    static ObsTuple compute_observables(const ComplexVector& z) {
+        Real s_sin = 0.0, s_u = 0.0, s_u2 = 0.0;
+
+#pragma omp parallel for reduction(+ : s_sin, s_u, s_u2)
+        for (std::size_t i = 0; i < z.size(); ++i) {
+            Real u = z[i].real();
+            Real phi = -z[i].imag();
+            s_sin += std::sin(Real(2.0) * phi);
+            s_u += u;
+            s_u2 += u * u;
+        }
+        return {s_sin, s_u, s_u2};
+    }
 };
 
 }  // namespace dw

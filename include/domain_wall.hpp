@@ -23,8 +23,16 @@ class DomainWall {
     using Complex = typename Backend::PrecisionType::Complex;
     using ComplexVector = typename Backend::template Vector<Complex>;
 
+    Real eps_;
+    unsigned int seed_;
+
+    Real get_alpha() const { return alpha_; }
+    Real get_h0() const { return h0_; }
+    Real get_ha() const { return ha_; }
+    Real get_omega() const { return omega_; }
+
     DomainWall(std::size_t size, double L, double alpha, double h0, double ha, double omega,
-               double dt)
+               double dt, double eps, unsigned int seed)
         : size_(size),
           L_(static_cast<Real>(L)),
           alpha_(static_cast<Real>(alpha)),
@@ -32,6 +40,8 @@ class DomainWall {
           ha_(static_cast<Real>(ha)),
           omega_(static_cast<Real>(omega)),
           dt_(static_cast<Real>(dt)),
+          eps_(static_cast<Real>(eps)),
+          seed_(seed),
           state_(size),
           stepper_(size),
           prop_z_(size),
@@ -85,12 +95,12 @@ class DomainWall {
     }
 
     void initialize_state() {
-        std::mt19937 gen(42);
-        std::uniform_real_distribution<Real> dist(-0.05, 0.05);
+        std::mt19937 gen(seed_);
+        std::uniform_real_distribution<Real> dist(-eps_, eps_);
         for (std::size_t i = 0; i < size_; ++i) {
             Real u = dist(gen);
             Real phi = dist(gen);
-            state_.u[i] = Complex(u, -phi);
+            state_.u[i] = Complex(u, phi);
         }
         Backend::synchronize();
     }

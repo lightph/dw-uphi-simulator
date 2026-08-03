@@ -87,6 +87,31 @@ struct CpuBackend {
         }
         return {s_sin, s_u, s_u2};
     }
+
+    static Real compute_spectral_entropy(const ComplexVector& u_hat) {
+        Real sum_S = 0.0;
+#pragma omp parallel for reduction(+ : sum_S)
+        for (std::size_t i = 0; i < u_hat.size(); ++i) {
+            Real r = u_hat[i].real();
+            Real im = u_hat[i].imag();
+            sum_S += r * r + im * im;
+        }
+
+        if (sum_S <= 0.0) return 0.0;
+
+        Real entropy = 0.0;
+#pragma omp parallel for reduction(+ : entropy)
+        for (std::size_t i = 0; i < u_hat.size(); ++i) {
+            Real r = u_hat[i].real();
+            Real im = u_hat[i].imag();
+            Real S = r * r + im * im;
+            if (S > 0.0) {
+                Real p = S / sum_S;
+                entropy -= p * std::log(p);
+            }
+        }
+        return entropy / std::log(static_cast<Real>(u_hat.size()));
+    }
 };
 
 }  // namespace dw

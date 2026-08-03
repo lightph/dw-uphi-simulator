@@ -76,6 +76,30 @@ struct DiffSqFunctor {
     }
 };
 
+template <typename Real, typename Complex>
+struct PowerSpectrumOp {
+    __host__ __device__ Real operator()(const Complex& c) const {
+        Real r = c.real();
+        Real im = c.imag();
+        return r * r + im * im;
+    }
+};
+
+template <typename Real, typename Complex>
+struct EntropyOp {
+    Real sum_S;
+    __host__ __device__ Real operator()(const Complex& c) const {
+        Real r = c.real();
+        Real im = c.imag();
+        Real S = r * r + im * im;
+        if (S > 0.0) {
+            Real p = S / sum_S;
+            return -p * log(p);  // cuFFT uses math.h log
+        }
+        return 0.0;
+    }
+};
+
 template <typename Precision>
 struct GpuBackend {
     using PrecisionType = Precision;
@@ -142,6 +166,22 @@ struct GpuBackend {
         ObsTuple<Real> init = {Real(0.0), Real(0.0), Real(0.0)};
 
         return thrust::transform_reduce(ptr, ptr + z.size(), transform_op, init, reduce_op);
+    }
+
+    static Real compute_spectral_entropy(const ComplexVector& u_hat) {
+        thrust::device_ptr<const Complex> ptr(u_hat.data());
+
+        PowerSpectrumOp<Real, Complex> ps_op;
+        Real sum_S = thrust::transform_reduce(ptr, ptr + u_hat.size(), ps_op, Real(0.0),
+                                              thrust::plus<Real>());
+
+        if (sum_S <= 0.0) return Real(0.0);
+
+        EntropyOp<Real, Complex> ent_op{sum_S};
+        Real entropy = thrust::transform_reduce(ptr, ptr + u_hat.size(), ent_op, Real(0.0),
+                                                thrust::plus<Real>());
+
+        return entropy / std::log(static_cast<Real>(u_hat.size()));
     }
 };
 

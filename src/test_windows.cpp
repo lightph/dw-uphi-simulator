@@ -19,44 +19,57 @@ void run_window_analysis(std::size_t size, double L, double alpha, double h0, do
                          double omega, double dt, int W, int N, double eps, unsigned int seed,
                          const std::string& output_file) {
     using Real = typename Backend::PrecisionType::Real;
+    using ComplexVector =
+        typename Backend::template Vector<typename Backend::PrecisionType::Complex>;
 
     dw::DomainWall<Backend> sim(size, L, alpha, h0, ha, omega, dt, eps, seed);
 
     std::ofstream out(output_file);
     out << std::setprecision(std::numeric_limits<Real>::max_digits10);
-    out << "window_index time mean_variance drift\n";
+    out << "window_index time mean_variance var_drift spectral_entropy ent_drift\n";
 
     Real current_time = 0.0;
     Backend::synchronize();
 
     Real previous_mean_var = -1.0;
+    Real previous_entropy = -1.0;
 
     for (int n = 0; n < N; ++n) {
         Real sum_var_u = 0.0;
+        Real sum_entropy = 0.0;
 
         for (int i = 0; i < W; ++i) {
             sim.step(current_time);
 
+            // Accumulate Spatial Variance
             auto obs = Backend::compute_observables(sim.get_state().u);
             Real N_grid = static_cast<Real>(sim.get_size());
             Real mean_u = obs.u / N_grid;
             Real mean_u2 = obs.u2 / N_grid;
-            Real var_u = mean_u2 - (mean_u * mean_u);
+            sum_var_u += mean_u2 - (mean_u * mean_u);
 
-            sum_var_u += var_u;
+            // Accumulate Spectral Entropy (using the stepper's pre-computed u_hat)
+            sum_entropy += Backend::compute_spectral_entropy(sim.get_state().u_hat);
         }
 
+        // --- Spatial Variance Metrics ---
         Real current_mean_var = sum_var_u / W;
-        Real drift =
+        Real var_drift =
             (previous_mean_var >= 0.0) ? std::abs(current_mean_var - previous_mean_var) : 0.0;
 
-        out << n << " " << current_time << " " << current_mean_var << " " << drift << "\n";
+        // --- Spectral Entropy Metrics ---
+        Real current_entropy = sum_entropy / W;
+        Real ent_drift =
+            (previous_entropy >= 0.0) ? std::abs(current_entropy - previous_entropy) : 0.0;
+
+        out << n << " " << current_time << " " << current_mean_var << " " << var_drift << " "
+            << current_entropy << " " << ent_drift << "\n";
 
         previous_mean_var = current_mean_var;
+        previous_entropy = current_entropy;
     }
     out.close();
 }
-
 int main(int argc, char** argv) {
     if (argc < 12) {
         std::cerr << "Usage: " << argv[0]

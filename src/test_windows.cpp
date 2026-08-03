@@ -1,3 +1,4 @@
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -18,40 +19,40 @@ void run_window_analysis(std::size_t size, double L, double alpha, double h0, do
                          double omega, double dt, int W, int N, double eps, unsigned int seed,
                          const std::string& output_file) {
     using Real = typename Backend::PrecisionType::Real;
-    using ComplexVector =
-        typename Backend::template Vector<typename Backend::PrecisionType::Complex>;
 
     dw::DomainWall<Backend> sim(size, L, alpha, h0, ha, omega, dt, eps, seed);
-    ComplexVector u_old(size);
-    std::vector<Real> step_velocities(W);
 
     std::ofstream out(output_file);
     out << std::setprecision(std::numeric_limits<Real>::max_digits10);
-    out << "window_index time variance\n";
+    out << "window_index time mean_variance drift\n";
 
     Real current_time = 0.0;
     Backend::synchronize();
 
+    Real previous_mean_var = -1.0;
+
     for (int n = 0; n < N; ++n) {
-        Real mean_velocity = 0.0;
+        Real sum_var_u = 0.0;
 
         for (int i = 0; i < W; ++i) {
-            Backend::copy(sim.get_state().u, u_old);
             sim.step(current_time);
 
-            Real diff_sq = Backend::compute_diff_sq(u_old, sim.get_state().u);
-            step_velocities[i] = diff_sq / (static_cast<Real>(dt * dt));
-            mean_velocity += step_velocities[i];
+            auto obs = Backend::compute_observables(sim.get_state().u);
+            Real N_grid = static_cast<Real>(sim.get_size());
+            Real mean_u = obs.u / N_grid;
+            Real mean_u2 = obs.u2 / N_grid;
+            Real var_u = mean_u2 - (mean_u * mean_u);
+
+            sum_var_u += var_u;
         }
 
-        mean_velocity /= W;
-        Real window_var = 0.0;
-        for (Real v : step_velocities) {
-            window_var += (v - mean_velocity) * (v - mean_velocity);
-        }
-        window_var /= W;
+        Real current_mean_var = sum_var_u / W;
+        Real drift =
+            (previous_mean_var >= 0.0) ? std::abs(current_mean_var - previous_mean_var) : 0.0;
 
-        out << n << " " << current_time << " " << window_var << "\n";
+        out << n << " " << current_time << " " << current_mean_var << " " << drift << "\n";
+
+        previous_mean_var = current_mean_var;
     }
     out.close();
 }

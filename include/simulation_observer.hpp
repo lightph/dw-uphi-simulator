@@ -20,7 +20,7 @@ class SimulationObserver {
         typename Backend::template Vector<typename Backend::PrecisionType::Complex>;
 
     SimulationObserver(DomainWall<Backend>& sim, const std::string& output_file)
-        : sim_(sim), out_(output_file), current_time_(0.0), u_old_(sim.get_size()) {
+        : sim_(sim), out_(output_file), current_time_(0.0) {
         out_ << std::setprecision(std::numeric_limits<Real>::max_digits10);
         out_ << "time avg_u_dot avg_phi_dot var_u phase_variance\n";
     }
@@ -29,56 +29,34 @@ class SimulationObserver {
         if (out_.is_open()) out_.close();
     }
 
-    void run_until_settled(int W, int N, double tolerance) {
-        std::vector<Real> step_velocities(W);
-        std::deque<Real> window_variances;
-        Real dt = sim_.get_dt();
-
+    void run_until_settled(int W, double tolerance) {
         Backend::synchronize();
 
+        Real previous_mean_var = -1.0;
+
         while (true) {
-            Real mean_velocity = 0.0;
-
             for (int i = 0; i < W; ++i) {
-                Backend::copy(sim_.get_state().u, u_old_);
                 sim_.step(current_time_);
-
-                Real diff_sq = Backend::compute_diff_sq(u_old_, sim_.get_state().u);
-                step_velocities[i] = diff_sq / (dt * dt);
-                mean_velocity += step_velocities[i];
-
                 accumulate_observables();
             }
 
-            mean_velocity /= W;
-            Real window_var = 0.0;
-            for (Real v : step_velocities) {
-                window_var += (v - mean_velocity) * (v - mean_velocity);
-            }
-            window_var /= W;
+            Real current_mean_var = sum_var_u_ / sample_count_;
 
-            window_variances.push_back(window_var);
-            if (window_variances.size() > N) {
-                window_variances.pop_front();
-            }
+            if (previous_mean_var >= 0.0) {
+                Real drift = std::abs(current_mean_var - previous_mean_var);
 
-            write_state(window_var);
-
-            if (window_variances.size() == N) {
-                Real var_mean = 0.0;
-                for (Real v : window_variances) var_mean += v;
-                var_mean /= N;
-
-                Real var_std = 0.0;
-                for (Real v : window_variances) var_std += (v - var_mean) * (v - var_mean);
-                var_std = std::sqrt(var_std / N);
-
-                if (var_std < tolerance) {
+                if (drift < tolerance) {
                     std::cout << "System settled at t = " << current_time_
-                              << " with std(variances) = " << var_std << "\n";
+                              << " with variance drift = " << drift << "\n";
+
+                    // Write the final state before breaking out
+                    write_state(current_mean_var);
                     break;
                 }
             }
+
+            write_state(current_mean_var);
+            previous_mean_var = current_mean_var;
         }
     }
 
@@ -86,7 +64,6 @@ class SimulationObserver {
     DomainWall<Backend>& sim_;
     std::ofstream out_;
     Real current_time_;
-    ComplexVector u_old_;
 
     Real sum_avg_u_dot_ = 0.0;
     Real sum_avg_phi_dot_ = 0.0;

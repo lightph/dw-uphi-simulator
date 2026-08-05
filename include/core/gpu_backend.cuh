@@ -1,6 +1,7 @@
 #pragma once
 
 #include <thrust/device_ptr.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 #include <thrust/transform_reduce.h>
 
@@ -77,36 +78,61 @@ struct DiffSqFunctor {
 };
 
 template <typename Real, typename Complex>
-struct PowerSpectrumOp {
-    __host__ __device__ Real operator()(const Complex& c) const {
-        Real r = c.real();
-        Real im = c.imag();
-        return r * r + im * im;
+struct UPowerSpectrumOp {
+    const Complex* z_hat;
+    std::size_t N;
+
+    __host__ __device__ Real operator()(std::size_t i) const {
+        std::size_t i_neg = (N - i) % N;
+        Real A = z_hat[i].real();
+        Real B = z_hat[i].imag();
+        Real C = z_hat[i_neg].real();
+        Real D = z_hat[i_neg].imag();
+
+        Real real_u = Real(0.5) * (A + C);
+        Real imag_u = Real(0.5) * (B - D);
+        return real_u * real_u + imag_u * imag_u;
     }
 };
 
 template <typename Real, typename Complex>
-struct EntropyOp {
+struct UEntropyOp {
+    const Complex* z_hat;
+    std::size_t N;
     Real sum_S;
-    __host__ __device__ Real operator()(const Complex& c) const {
-        Real r = c.real();
-        Real im = c.imag();
-        Real S = r * r + im * im;
+
+    __host__ __device__ Real operator()(std::size_t i) const {
+        std::size_t i_neg = (N - i) % N;
+        Real A = z_hat[i].real();
+        Real B = z_hat[i].imag();
+        Real C = z_hat[i_neg].real();
+        Real D = z_hat[i_neg].imag();
+
+        Real real_u = Real(0.5) * (A + C);
+        Real imag_u = Real(0.5) * (B - D);
+        Real S = real_u * real_u + imag_u * imag_u;
+
         if (S > 0.0) {
             Real p = S / sum_S;
-            return -p * log(p);  // cuFFT uses math.h log
+            return -p * log(p);
         }
-        return 0.0;
+        return Real(0.0);
     }
 };
 
 template <typename Real, typename Complex>
-__global__ void accumulate_ps_kernel(const Complex* u_hat, Real* ps_accum, std::size_t size) {
+__global__ void accumulate_ps_u_kernel(const Complex* z_hat, Real* ps_accum, std::size_t size) {
     std::size_t i = blockIdx.x * blockDim.x + threadIdx.x;
     if (i < size) {
-        Real r = u_hat[i].real();
-        Real im = u_hat[i].imag();
-        ps_accum[i] += r * r + im * im;
+        std::size_t i_neg = (size - i) % size;
+        Real A = z_hat[i].real();
+        Real B = z_hat[i].imag();
+        Real C = z_hat[i_neg].real();
+        Real D = z_hat[i_neg].imag();
+
+        Real real_u = Real(0.5) * (A + C);
+        Real imag_u = Real(0.5) * (B - D);
+        ps_accum[i] += real_u * real_u + imag_u * imag_u;
     }
 }
 
@@ -178,32 +204,33 @@ struct GpuBackend {
         return thrust::transform_reduce(ptr, ptr + z.size(), transform_op, init, reduce_op);
     }
 
-    static Real compute_spectral_entropy(const ComplexVector& u_hat) {
-        thrust::device_ptr<const Complex> ptr(u_hat.data());
+    static void accumulate_power_spectrum(const ComplexVector& u_hat, CudaVector<Real>& ps_accum) {
+        int blockSize = 256;
+        int numBlocks = (u_hat.size() + blockSize - 1) / blockSize;
+        accumulate_ps_u_kernel<Real, Complex>
+            <<<numBlocks, blockSize>>>(u_hat.data(), ps_accum.data(), u_hat.size());
+    }
 
-        PowerSpectrumOp<Real, Complex> ps_op;
-        Real sum_S = thrust::transform_reduce(ptr, ptr + u_hat.size(), ps_op, Real(0.0),
+    static Real compute_spectral_entropy(const ComplexVector& u_hat) {
+        std::size_t N = u_hat.size();
+        auto count_it = thrust::make_counting_iterator<std::size_t>(0);
+
+        UPowerSpectrumOp<Real, Complex> ps_op{u_hat.data(), N};
+        Real sum_S = thrust::transform_reduce(count_it, count_it + N, ps_op, Real(0.0),
                                               thrust::plus<Real>());
 
         if (sum_S <= 0.0) return Real(0.0);
 
-        EntropyOp<Real, Complex> ent_op{sum_S};
-        Real entropy = thrust::transform_reduce(ptr, ptr + u_hat.size(), ent_op, Real(0.0),
+        UEntropyOp<Real, Complex> ent_op{u_hat.data(), N, sum_S};
+        Real entropy = thrust::transform_reduce(count_it, count_it + N, ent_op, Real(0.0),
                                                 thrust::plus<Real>());
 
-        return entropy / std::log(static_cast<Real>(u_hat.size()));
+        return entropy / std::log(static_cast<Real>(N));
     }
 
     static void fill_zero(CudaVector<Real>& vec) {
         thrust::device_ptr<Real> ptr(vec.data());
         thrust::fill(ptr, ptr + vec.size(), Real(0.0));
-    }
-
-    static void accumulate_power_spectrum(const ComplexVector& u_hat, CudaVector<Real>& ps_accum) {
-        int blockSize = 256;
-        int numBlocks = (u_hat.size() + blockSize - 1) / blockSize;
-        accumulate_ps_kernel<Real, Complex>
-            <<<numBlocks, blockSize>>>(u_hat.data(), ps_accum.data(), u_hat.size());
     }
 
     static std::vector<Real> download_array(const CudaVector<Real>& vec) {

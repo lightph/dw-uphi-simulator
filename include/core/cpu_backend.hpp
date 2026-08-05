@@ -88,43 +88,65 @@ struct CpuBackend {
         return {s_sin, s_u, s_u2};
     }
 
+    static void accumulate_power_spectrum(const ComplexVector& u_hat,
+                                          AlignedVector<Real>& ps_accum) {
+        std::size_t N = u_hat.size();
+#pragma omp parallel for
+        for (std::size_t i = 0; i < N; ++i) {
+            std::size_t i_neg = (N - i) % N;
+            Real A = u_hat[i].real();
+            Real B = u_hat[i].imag();
+            Real C = u_hat[i_neg].real();
+            Real D = u_hat[i_neg].imag();
+
+            Real real_u = 0.5 * (A + C);
+            Real imag_u = 0.5 * (B - D);
+            ps_accum[i] += real_u * real_u + imag_u * imag_u;
+        }
+    }
+
     static Real compute_spectral_entropy(const ComplexVector& u_hat) {
+        std::size_t N = u_hat.size();
         Real sum_S = 0.0;
+
 #pragma omp parallel for reduction(+ : sum_S)
-        for (std::size_t i = 0; i < u_hat.size(); ++i) {
-            Real r = u_hat[i].real();
-            Real im = u_hat[i].imag();
-            sum_S += r * r + im * im;
+        for (std::size_t i = 0; i < N; ++i) {
+            std::size_t i_neg = (N - i) % N;
+            Real A = u_hat[i].real();
+            Real B = u_hat[i].imag();
+            Real C = u_hat[i_neg].real();
+            Real D = u_hat[i_neg].imag();
+
+            Real real_u = 0.5 * (A + C);
+            Real imag_u = 0.5 * (B - D);
+            sum_S += real_u * real_u + imag_u * imag_u;
         }
 
         if (sum_S <= 0.0) return 0.0;
 
         Real entropy = 0.0;
 #pragma omp parallel for reduction(+ : entropy)
-        for (std::size_t i = 0; i < u_hat.size(); ++i) {
-            Real r = u_hat[i].real();
-            Real im = u_hat[i].imag();
-            Real S = r * r + im * im;
+        for (std::size_t i = 0; i < N; ++i) {
+            std::size_t i_neg = (N - i) % N;
+            Real A = u_hat[i].real();
+            Real B = u_hat[i].imag();
+            Real C = u_hat[i_neg].real();
+            Real D = u_hat[i_neg].imag();
+
+            Real real_u = 0.5 * (A + C);
+            Real imag_u = 0.5 * (B - D);
+            Real S = real_u * real_u + imag_u * imag_u;
+
             if (S > 0.0) {
                 Real p = S / sum_S;
                 entropy -= p * std::log(p);
             }
         }
-        return entropy / std::log(static_cast<Real>(u_hat.size()));
+        return entropy / std::log(static_cast<Real>(N));
     }
 
     static void fill_zero(AlignedVector<Real>& vec) {
         std::fill(vec.begin(), vec.end(), Real(0.0));
-    }
-
-    static void accumulate_power_spectrum(const ComplexVector& u_hat,
-                                          AlignedVector<Real>& ps_accum) {
-#pragma omp parallel for
-        for (std::size_t i = 0; i < u_hat.size(); ++i) {
-            Real r = u_hat[i].real();
-            Real im = u_hat[i].imag();
-            ps_accum[i] += r * r + im * im;
-        }
     }
 
     static std::vector<Real> download_array(const AlignedVector<Real>& vec) {

@@ -89,8 +89,9 @@ struct UPowerSpectrumOp {
         Real C = z_hat[i_neg].real();
         Real D = z_hat[i_neg].imag();
 
-        Real real_u = Real(0.5) * (A + C);
-        Real imag_u = Real(0.5) * (B - D);
+        Real norm = Real(1.0) / static_cast<Real>(N);
+        Real real_u = Real(0.5) * (A + C) * norm;
+        Real imag_u = Real(0.5) * (B - D) * norm;
         return real_u * real_u + imag_u * imag_u;
     }
 };
@@ -108,11 +109,12 @@ struct UEntropyOp {
         Real C = z_hat[i_neg].real();
         Real D = z_hat[i_neg].imag();
 
-        Real real_u = Real(0.5) * (A + C);
-        Real imag_u = Real(0.5) * (B - D);
+        Real norm = Real(1.0) / static_cast<Real>(N);
+        Real real_u = Real(0.5) * (A + C) * norm;
+        Real imag_u = Real(0.5) * (B - D) * norm;
         Real S = real_u * real_u + imag_u * imag_u;
 
-        if (S > 0.0) {
+        if (S > Real(0.0)) {
             Real p = S / sum_S;
             return -p * log(p);
         }
@@ -130,8 +132,9 @@ __global__ void accumulate_ps_u_kernel(const Complex* z_hat, Real* ps_accum, std
         Real C = z_hat[i_neg].real();
         Real D = z_hat[i_neg].imag();
 
-        Real real_u = Real(0.5) * (A + C);
-        Real imag_u = Real(0.5) * (B - D);
+        Real norm = Real(1.0) / static_cast<Real>(size);
+        Real real_u = Real(0.5) * (A + C) * norm;
+        Real imag_u = Real(0.5) * (B - D) * norm;
         ps_accum[i] += real_u * real_u + imag_u * imag_u;
     }
 }
@@ -216,16 +219,18 @@ struct GpuBackend {
         auto count_it = thrust::make_counting_iterator<std::size_t>(0);
 
         UPowerSpectrumOp<Real, Complex> ps_op{u_hat.data(), N};
-        Real sum_S = thrust::transform_reduce(count_it, count_it + N, ps_op, Real(0.0),
+
+        // Start transform_reduce from index 1 (count_it + 1) to ignore k=0
+        Real sum_S = thrust::transform_reduce(count_it + 1, count_it + N, ps_op, Real(0.0),
                                               thrust::plus<Real>());
 
-        if (sum_S <= 0.0) return Real(0.0);
+        if (sum_S <= Real(0.0)) return Real(0.0);
 
         UEntropyOp<Real, Complex> ent_op{u_hat.data(), N, sum_S};
-        Real entropy = thrust::transform_reduce(count_it, count_it + N, ent_op, Real(0.0),
+        Real entropy = thrust::transform_reduce(count_it + 1, count_it + N, ent_op, Real(0.0),
                                                 thrust::plus<Real>());
 
-        return entropy / std::log(static_cast<Real>(N));
+        return entropy / std::log(static_cast<Real>(N - 1));
     }
 
     static void fill_zero(CudaVector<Real>& vec) {

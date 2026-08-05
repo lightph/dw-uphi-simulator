@@ -1,7 +1,9 @@
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -21,7 +23,7 @@
 template <typename Backend>
 void run_h0_sweep(std::size_t size, double L, double alpha, double ha, double omega, double dt,
                   double h0_start, double h0_end, int h0_steps, double eps, unsigned int seed,
-                  const std::string& output_prefix) {
+                  const std::string& output_prefix, bool randomize_sweep) {
     using Real = typename Backend::PrecisionType::Real;
     using VectorReal = typename Backend::template Vector<Real>;
 
@@ -31,6 +33,16 @@ void run_h0_sweep(std::size_t size, double L, double alpha, double ha, double om
     out_summary << "h0 var_u u_dot phi_dot spectral_entropy\n";
 
     double h0_step_size = (h0_steps > 1) ? (h0_end - h0_start) / (h0_steps - 1) : 0.0;
+
+    std::vector<double> h0_vals(h0_steps);
+    for (int step = 0; step < h0_steps; ++step) {
+        h0_vals[step] = h0_start + step * h0_step_size;
+    }
+
+    if (randomize_sweep) {
+        std::mt19937 g(seed);
+        std::shuffle(h0_vals.begin(), h0_vals.end(), g);
+    }
 
     unsigned long long transient_steps = 1ULL << 22;
 
@@ -44,7 +56,7 @@ void run_h0_sweep(std::size_t size, double L, double alpha, double ha, double om
     std::cout << "Accumulation steps (100 periods): " << acc_steps << "\n\n";
 
     for (int step = 0; step < h0_steps; ++step) {
-        double current_h0 = h0_start + step * h0_step_size;
+        double current_h0 = h0_vals[step];
         std::cout << "Running h0 = " << current_h0 << "...\n";
 
         dw::DomainWall<Backend> sim(size, L, alpha, current_h0, ha, omega, dt, eps, seed);
@@ -118,7 +130,7 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: " << argv[0]
                   << " <size> <L> <alpha> <ha> <omega> <dt> <h0_start> <h0_end> <h0_steps> "
                      "<backend> <output_prefix> "
-                     "[eps=0.05] [seed=42] [precision=double]\n";
+                     "[eps=0.05] [seed=42] [precision=double] [randomize=0]\n";
         return 1;
     }
 
@@ -138,26 +150,34 @@ int main(int argc, char** argv) {
     unsigned int seed = (argc > 13) ? std::stoul(argv[13]) : 42;
     std::string precision = (argc > 14) ? argv[14] : "double";
 
+    bool randomize = false;
+    if (argc > 15) {
+        std::string rand_str = argv[15];
+        if (rand_str == "1" || rand_str == "true" || rand_str == "True") {
+            randomize = true;
+        }
+    }
+
     if (backend == "cpu") {
         if (precision == "single") {
             run_h0_sweep<dw::CpuBackend<dw::FftwSinglePrecision>>(size, L, alpha, ha, omega, dt,
                                                                   h0_start, h0_end, h0_steps, eps,
-                                                                  seed, output_prefix);
+                                                                  seed, output_prefix, randomize);
         } else {
             run_h0_sweep<dw::CpuBackend<dw::FftwDoublePrecision>>(size, L, alpha, ha, omega, dt,
                                                                   h0_start, h0_end, h0_steps, eps,
-                                                                  seed, output_prefix);
+                                                                  seed, output_prefix, randomize);
         }
     } else if (backend == "gpu") {
 #ifdef HAS_CUDA
         if (precision == "single") {
             run_h0_sweep<dw::GpuBackend<dw::CudaSinglePrecision>>(size, L, alpha, ha, omega, dt,
                                                                   h0_start, h0_end, h0_steps, eps,
-                                                                  seed, output_prefix);
+                                                                  seed, output_prefix, randomize);
         } else {
             run_h0_sweep<dw::GpuBackend<dw::CudaDoublePrecision>>(size, L, alpha, ha, omega, dt,
                                                                   h0_start, h0_end, h0_steps, eps,
-                                                                  seed, output_prefix);
+                                                                  seed, output_prefix, randomize);
         }
 #else
         std::cerr << "Binary compiled without CUDA.\n";

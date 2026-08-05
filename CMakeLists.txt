@@ -86,3 +86,8 @@ target_link_libraries(test_windows PRIVATE dw_core)
 add_executable(scan src/scan.cpp)
 set_source_files_properties(src/scan.cpp PROPERTIES LANGUAGE CUDA)
 target_link_libraries(scan PRIVATE dw_core)
+
+
+add_executable(sweep src/sweep.cpp)
+set_source_files_properties(src/sweep.cpp PROPERTIES LANGUAGE CUDA)
+target_link_libraries(scan PRIVATE dw_core)

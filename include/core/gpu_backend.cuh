@@ -100,6 +100,16 @@ struct EntropyOp {
     }
 };
 
+template <typename Real, typename Complex>
+__global__ void accumulate_ps_kernel(const Complex* u_hat, Real* ps_accum, std::size_t size) {
+    std::size_t i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i < size) {
+        Real r = u_hat[i].real();
+        Real im = u_hat[i].imag();
+        ps_accum[i] += r * r + im * im;
+    }
+}
+
 template <typename Precision>
 struct GpuBackend {
     using PrecisionType = Precision;
@@ -182,6 +192,24 @@ struct GpuBackend {
                                                 thrust::plus<Real>());
 
         return entropy / std::log(static_cast<Real>(u_hat.size()));
+    }
+
+    static void fill_zero(CudaVector<Real>& vec) {
+        thrust::device_ptr<Real> ptr(vec.data());
+        thrust::fill(ptr, ptr + vec.size(), Real(0.0));
+    }
+
+    static void accumulate_power_spectrum(const ComplexVector& u_hat, CudaVector<Real>& ps_accum) {
+        int blockSize = 256;
+        int numBlocks = (u_hat.size() + blockSize - 1) / blockSize;
+        accumulate_ps_kernel<Real, Complex>
+            <<<numBlocks, blockSize>>>(u_hat.data(), ps_accum.data(), u_hat.size());
+    }
+
+    static std::vector<Real> download_array(const CudaVector<Real>& vec) {
+        std::vector<Real> host_vec(vec.size());
+        cudaMemcpy(host_vec.data(), vec.data(), vec.size() * sizeof(Real), cudaMemcpyDeviceToHost);
+        return host_vec;
     }
 };
 

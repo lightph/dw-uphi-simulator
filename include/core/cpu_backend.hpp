@@ -112,6 +112,24 @@ struct CpuBackend {
         }
         return entropy / std::log(static_cast<Real>(u_hat.size()));
     }
+
+    static void fill_zero(AlignedVector<Real>& vec) {
+        std::fill(vec.begin(), vec.end(), Real(0.0));
+    }
+
+    static void accumulate_power_spectrum(const ComplexVector& u_hat,
+                                          AlignedVector<Real>& ps_accum) {
+#pragma omp parallel for
+        for (std::size_t i = 0; i < u_hat.size(); ++i) {
+            Real r = u_hat[i].real();
+            Real im = u_hat[i].imag();
+            ps_accum[i] += r * r + im * im;
+        }
+    }
+
+    static std::vector<Real> download_array(const AlignedVector<Real>& vec) {
+        return std::vector<Real>(vec.begin(), vec.end());
+    }
 };
 
 }  // namespace dw

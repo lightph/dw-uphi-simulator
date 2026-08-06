@@ -91,3 +91,8 @@ target_link_libraries(scan PRIVATE dw_core)
 add_executable(sweep src/sweep.cpp)
 set_source_files_properties(src/sweep.cpp PROPERTIES LANGUAGE CUDA)
 target_link_libraries(sweep PRIVATE dw_core)
+
+
+add_executable(time_evo src/time_evo.cpp)
+set_source_files_properties(src/time_evo.cpp PROPERTIES LANGUAGE CUDA)
+target_link_libraries(time_evo PRIVATE dw_core)

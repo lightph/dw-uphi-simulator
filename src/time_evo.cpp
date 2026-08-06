@@ -71,7 +71,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         VectorReal ps_accum(size);
         Backend::fill_zero(ps_accum);
 
-        std::vector<Real> phi_dot_series(acc_steps);
+        std::vector<Real> mean_u_series(acc_steps);
 
         // Advance through the accumulation window at the end of the batch
         for (unsigned long long t = 0; t < acc_steps; ++t) {
@@ -90,7 +90,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             Real u_dot = 0.5 * (alpha * alpha * h_val + mean_sin2phi);
             Real phi_dot = 0.5 * (alpha * h_val - alpha * mean_sin2phi);
 
-            phi_dot_series[t] = phi_dot;
+            mean_u_series[t] = mean_u;
 
             sum_var_u += var_u;
             sum_u_dot += u_dot;
@@ -123,12 +123,12 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         }
         out_ps.close();
         std::string ts_file =
-            output_prefix + "_phi_dot_ts_step_" + std::to_string(target_steps) + ".txt";
+            output_prefix + "_mean_u_ts_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_ts(ts_file);
         out_ts << std::setprecision(std::numeric_limits<Real>::max_digits10);
-        out_ts << "time phi_dot\n";
+        out_ts << "time mean_u\n";
         for (unsigned long long i = 0; i < acc_steps; ++i) {
-            out_ts << (i * dt) << " " << phi_dot_series[i] << "\n";
+            out_ts << (i * dt) << " " << mean_u_series[i] << "\n";
         }
         out_ts.close();
 

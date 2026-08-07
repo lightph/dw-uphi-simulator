@@ -155,6 +155,9 @@ struct CpuBackend {
     static std::vector<Real> download_array(const AlignedVector<Real>& vec) {
         return std::vector<Real>(vec.begin(), vec.end());
     }
+    static std::vector<Complex> download_array(const ComplexVector& vec) {
+        return std::vector<Complex>(vec.begin(), vec.end());
+    }
 };
 
 }  // namespace dw

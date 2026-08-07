@@ -243,6 +243,13 @@ struct GpuBackend {
         cudaMemcpy(host_vec.data(), vec.data(), vec.size() * sizeof(Real), cudaMemcpyDeviceToHost);
         return host_vec;
     }
+
+    static std::vector<Complex> download_array(const ComplexVector& vec) {
+        std::vector<Complex> host_vec(vec.size());
+        cudaMemcpy(host_vec.data(), vec.data(), vec.size() * sizeof(Complex),
+                   cudaMemcpyDeviceToHost);
+        return host_vec;
+    }
 };
 
 }  // namespace dw

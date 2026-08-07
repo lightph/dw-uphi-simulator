@@ -138,7 +138,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         // ---------------------------------------------------------------------------------
 
         // 1. Save the complete real state in real space
-        std::vector<Real> host_u = Backend::download_array(sim.get_state().u);
+        auto host_u = Backend::download_array(sim.get_state().u);
         std::string state_file =
             output_prefix + "_real_state_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_state(state_file);
@@ -146,7 +146,8 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         out_state << "x u\n";
         double dx = L / size;
         for (std::size_t i = 0; i < size; ++i) {
-            out_state << (i * dx) << " " << host_u[i] << "\n";
+            const Real* u_ptr = reinterpret_cast<const Real*>(&host_u[i]);
+            out_state << (i * dx) << " " << u_ptr[0] << "\n";
         }
         out_state.close();
 

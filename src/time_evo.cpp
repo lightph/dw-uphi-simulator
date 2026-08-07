@@ -32,7 +32,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
     out_summary << std::setprecision(std::numeric_limits<Real>::max_digits10);
     out_summary << "total_steps var_u u_dot phi_dot spectral_entropy\n";
 
-    unsigned long long acc_steps_max = 10000;
+    unsigned long long acc_steps_max = 100000;
     if (std::abs(omega) > 1e-7) {
         double period = 2.0 * M_PI / std::abs(omega);
         acc_steps_max = static_cast<unsigned long long>(std::round(1000.0 * period / dt));

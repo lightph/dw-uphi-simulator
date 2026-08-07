@@ -122,6 +122,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             out_ps << k_phys << " " << (host_ps[i] / acc_steps) << "\n";
         }
         out_ps.close();
+
         std::string ts_file =
             output_prefix + "_mean_u_ts_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_ts(ts_file);
@@ -131,6 +132,48 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             out_ts << (i * dt) << " " << u_dot_series[i] << "\n";
         }
         out_ts.close();
+
+        // ---------------------------------------------------------------------------------
+        // NEW CODE: Save the real state (u) and the complex state (u_hat) after every batch
+        // ---------------------------------------------------------------------------------
+
+        // 1. Save the complete real state in real space
+        std::vector<Real> host_u = Backend::download_array(sim.get_state().u);
+        std::string state_file =
+            output_prefix + "_real_state_step_" + std::to_string(target_steps) + ".txt";
+        std::ofstream out_state(state_file);
+        out_state << std::setprecision(std::numeric_limits<Real>::max_digits10);
+        out_state << "x u\n";
+        double dx = L / size;
+        for (std::size_t i = 0; i < size; ++i) {
+            out_state << (i * dx) << " " << host_u[i] << "\n";
+        }
+        out_state.close();
+
+        // 2. Save the complete complex state in Fourier space
+        auto host_u_hat = Backend::download_array(sim.get_state().u_hat);
+        std::string uhat_file =
+            output_prefix + "_complex_state_step_" + std::to_string(target_steps) + ".txt";
+        std::ofstream out_uhat(uhat_file);
+        out_uhat << std::setprecision(std::numeric_limits<Real>::max_digits10);
+        out_uhat << "k Re(u_hat) Im(u_hat)\n";
+
+        for (std::size_t i = 0; i < host_u_hat.size(); ++i) {
+            long long k_idx =
+                (i <= host_u_hat.size() / 2)
+                    ? i
+                    : static_cast<long long>(i) - static_cast<long long>(host_u_hat.size());
+            double k_phys = k_idx * dk;
+
+            // Reinterpret cast is used to safely extract Re and Im parts regardless of whether the
+            // backend uses std::complex, fftw_complex, or cuDoubleComplex (they all share the same
+            // memory layout).
+            const Real* cplx_ptr = reinterpret_cast<const Real*>(&host_u_hat[i]);
+            out_uhat << k_phys << " " << cplx_ptr[0] << " " << cplx_ptr[1] << "\n";
+        }
+        out_uhat.close();
+
+        // ---------------------------------------------------------------------------------
 
         total_steps_done = target_steps;
         std::cout << "Finished step " << target_steps << " and saved to disk.\n";

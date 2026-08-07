@@ -35,7 +35,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
     unsigned long long acc_steps_max = 10000;
     if (std::abs(omega) > 1e-7) {
         double period = 2.0 * M_PI / std::abs(omega);
-        acc_steps_max = static_cast<unsigned long long>(std::round(100.0 * period / dt));
+        acc_steps_max = static_cast<unsigned long long>(std::round(1000.0 * period / dt));
     }
 
     std::cout << "Max accumulation steps (100 periods cap): " << acc_steps_max << "\n\n";

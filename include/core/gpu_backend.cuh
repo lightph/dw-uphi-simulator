@@ -139,6 +139,23 @@ __global__ void accumulate_ps_u_kernel(const Complex* z_hat, Real* ps_accum, std
     }
 }
 
+template <typename Real, typename Complex>
+__global__ void accumulate_hist_kernel(const Complex* z, unsigned long long* hist, std::size_t size,
+                                       std::size_t num_bins, Real mean_u, Real sigma_u,
+                                       Real min_val, Real max_val) {
+    std::size_t j = blockIdx.x * blockDim.x + threadIdx.x;
+    if (j < size) {
+        Real norm_u = (z[j].real() - mean_u) / sigma_u;
+        if (norm_u >= min_val && norm_u < max_val) {
+            Real bin_width = (max_val - min_val) / static_cast<Real>(num_bins);
+            int bin = static_cast<int>((norm_u - min_val) / bin_width);
+            if (bin >= 0 && bin < num_bins) {
+                atomicAdd(&hist[bin], 1ULL);
+            }
+        }
+    }
+}
+
 template <typename Precision>
 struct GpuBackend {
     using PrecisionType = Precision;
@@ -247,6 +264,27 @@ struct GpuBackend {
     static std::vector<Complex> download_array(const ComplexVector& vec) {
         std::vector<Complex> host_vec(vec.size());
         cudaMemcpy(host_vec.data(), vec.data(), vec.size() * sizeof(Complex),
+                   cudaMemcpyDeviceToHost);
+        return host_vec;
+    }
+
+    static void accumulate_height_histogram(const ComplexVector& z, Real mean_u, Real sigma_u,
+                                            CudaVector<unsigned long long>& hist, Real min_val,
+                                            Real max_val) {
+        int blockSize = 256;
+        int numBlocks = (z.size() + blockSize - 1) / blockSize;
+        accumulate_hist_kernel<Real, Complex><<<numBlocks, blockSize>>>(
+            z.data(), hist.data(), z.size(), hist.size(), mean_u, sigma_u, min_val, max_val);
+    }
+
+    static void fill_zero_ull(CudaVector<unsigned long long>& vec) {
+        cudaMemset(vec.data(), 0, vec.size() * sizeof(unsigned long long));
+    }
+
+    static std::vector<unsigned long long> download_array_ull(
+        const CudaVector<unsigned long long>& vec) {
+        std::vector<unsigned long long> host_vec(vec.size());
+        cudaMemcpy(host_vec.data(), vec.data(), vec.size() * sizeof(unsigned long long),
                    cudaMemcpyDeviceToHost);
         return host_vec;
     }

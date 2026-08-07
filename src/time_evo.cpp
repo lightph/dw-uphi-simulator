@@ -25,6 +25,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
                         const std::string& output_prefix) {
     using Real = typename Backend::PrecisionType::Real;
     using VectorReal = typename Backend::template Vector<Real>;
+    using VectorUll = typename Backend::template Vector<unsigned long long>;
 
     std::string summary_file = output_prefix + "_time_summary.txt";
     std::ofstream out_summary(summary_file);
@@ -49,15 +50,12 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         unsigned long long target_steps = 1ULL << n;
         unsigned long long batch_steps = target_steps - total_steps_done;
 
-        // The window of time to accumulate is the minimum between the current batch size and 100
-        // periods
         unsigned long long acc_steps = std::min(batch_steps, acc_steps_max);
         unsigned long long transient_batch_steps = batch_steps - acc_steps;
 
         std::cout << "Target total steps: " << target_steps << " | Batch steps: " << batch_steps
                   << " | Accumulating over last: " << acc_steps << "\n";
 
-        // Advance through the non-accumulated portion of the batch
         for (unsigned long long t = 0; t < transient_batch_steps; ++t) {
             sim.step(current_time);
         }
@@ -71,9 +69,15 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         VectorReal ps_accum(size);
         Backend::fill_zero(ps_accum);
 
+        std::vector<Real> mean_u_series(acc_steps);
         std::vector<Real> u_dot_series(acc_steps);
 
-        // Advance through the accumulation window at the end of the batch
+        std::size_t num_bins = 1000;
+        Real hist_min = -10.0;
+        Real hist_max = 10.0;
+        VectorUll d_hist(num_bins);
+        Backend::fill_zero_ull(d_hist);
+
         for (unsigned long long t = 0; t < acc_steps; ++t) {
             sim.step(current_time);
 
@@ -83,6 +87,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             Real mean_u = obs.u / N_grid;
             Real mean_u2 = obs.u2 / N_grid;
             Real var_u = mean_u2 - (mean_u * mean_u);
+            Real sigma_u = std::sqrt(std::max(var_u, Real(0.0)));
 
             Real mean_sin2phi = obs.sin2phi / N_grid;
             Real h_val = h0 + ha * std::cos(omega * current_time);
@@ -90,7 +95,13 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             Real u_dot = 0.5 * (alpha * alpha * h_val + mean_sin2phi);
             Real phi_dot = 0.5 * (alpha * h_val - alpha * mean_sin2phi);
 
+            mean_u_series[t] = mean_u;
             u_dot_series[t] = u_dot;
+
+            if (sigma_u > 0.0) {
+                Backend::accumulate_height_histogram(sim.get_state().u, mean_u, sigma_u, d_hist,
+                                                     hist_min, hist_max);
+            }
 
             sum_var_u += var_u;
             sum_u_dot += u_dot;
@@ -127,15 +138,31 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             output_prefix + "_mean_u_ts_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_ts(ts_file);
         out_ts << std::setprecision(std::numeric_limits<Real>::max_digits10);
-        out_ts << "time u_dot\n";
+        out_ts << "time mean_u u_dot\n";
         for (unsigned long long i = 0; i < acc_steps; ++i) {
-            out_ts << (i * dt) << " " << u_dot_series[i] << "\n";
+            out_ts << (i * dt) << " " << mean_u_series[i] << " " << u_dot_series[i] << "\n";
         }
         out_ts.close();
 
-        // ---------------------------------------------------------------------------------
-        // Save the complete complex state in real space
-        // ---------------------------------------------------------------------------------
+        std::vector<unsigned long long> h_hist = Backend::download_array_ull(d_hist);
+        std::string hist_file =
+            output_prefix + "_height_hist_step_" + std::to_string(target_steps) + ".txt";
+        std::ofstream out_hist(hist_file);
+        out_hist << std::setprecision(std::numeric_limits<Real>::max_digits10);
+        out_hist << "bin_center count probability_density\n";
+        Real bin_width = (hist_max - hist_min) / static_cast<Real>(num_bins);
+        unsigned long long total_counts = 0;
+        for (auto c : h_hist) total_counts += c;
+
+        for (std::size_t i = 0; i < num_bins; ++i) {
+            Real bin_center = hist_min + (i + 0.5) * bin_width;
+            Real prob = total_counts > 0
+                            ? static_cast<Real>(h_hist[i]) / static_cast<Real>(total_counts)
+                            : 0.0;
+            Real pdf = prob / bin_width;
+            out_hist << bin_center << " " << h_hist[i] << " " << pdf << "\n";
+        }
+        out_hist.close();
 
         auto host_u = Backend::download_array(sim.get_state().u);
         std::string state_file =
@@ -143,7 +170,6 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         std::ofstream out_state(state_file);
         out_state << std::setprecision(std::numeric_limits<Real>::max_digits10);
 
-        // Header updated to reflect Re and Im columns
         out_state << "x Re(u) Im(u)\n";
 
         double dx = L / size;
@@ -151,8 +177,6 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             out_state << (i * dx) << " " << host_u[i].real() << " " << host_u[i].imag() << "\n";
         }
         out_state.close();
-
-        // ---------------------------------------------------------------------------------
 
         total_steps_done = target_steps;
         std::cout << "Finished step " << target_steps << " and saved to disk.\n";

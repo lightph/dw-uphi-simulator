@@ -158,6 +158,40 @@ struct CpuBackend {
     static std::vector<Complex> download_array(const ComplexVector& vec) {
         return std::vector<Complex>(vec.begin(), vec.end());
     }
+    static void accumulate_height_histogram(const ComplexVector& z, Real mean_u, Real sigma_u,
+                                            AlignedVector<unsigned long long>& hist, Real min_val,
+                                            Real max_val) {
+        std::size_t num_bins = hist.size();
+        Real bin_width = (max_val - min_val) / static_cast<Real>(num_bins);
+
+#pragma omp parallel
+        {
+            std::vector<unsigned long long> local_hist(num_bins, 0);
+#pragma omp for
+            for (std::size_t j = 0; j < z.size(); ++j) {
+                Real norm_u = (z[j].real() - mean_u) / sigma_u;
+                if (norm_u >= min_val && norm_u < max_val) {
+                    int bin = static_cast<int>((norm_u - min_val) / bin_width);
+                    if (bin >= 0 && bin < num_bins) {
+                        local_hist[bin]++;
+                    }
+                }
+            }
+#pragma omp critical
+            for (std::size_t b = 0; b < num_bins; ++b) {
+                hist[b] += local_hist[b];
+            }
+        }
+    }
+
+    static void fill_zero_ull(AlignedVector<unsigned long long>& vec) {
+        std::fill(vec.begin(), vec.end(), 0ULL);
+    }
+
+    static std::vector<unsigned long long> download_array_ull(
+        const AlignedVector<unsigned long long>& vec) {
+        return std::vector<unsigned long long>(vec.begin(), vec.end());
+    }
 };
 
 }  // namespace dw

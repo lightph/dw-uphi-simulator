@@ -324,7 +324,7 @@ def main():
                 ax.set_ylim(u_centered.min() - y_margin, u_centered.max() + y_margin)
                 
                 cbar = fig.colorbar(lc, ax=ax, ticks=[-np.pi, 0, np.pi])
-                cbar.ax.set_yticklabels([r'$-\pi$', '0', '$\pi$'])
+                cbar.ax.set_yticklabels([r'$-\pi$', '0', r'$\pi$'])
                 cbar.set_label('Phase')
                 
                 ax.set_xlabel('x')
@@ -516,7 +516,7 @@ def main():
         ax.add_collection(lc)
         
         cbar = fig.colorbar(lc, ax=ax, ticks=[-np.pi, 0, np.pi])
-        cbar.ax.set_yticklabels([r'$-\pi$', '0', '$\pi$'])
+        cbar.ax.set_yticklabels([r'$-\pi$', '0', r'$\pi$'])
         cbar.set_label('Phase')
         
         ax.set_xlabel('x')

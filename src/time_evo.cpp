@@ -108,6 +108,12 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             Real var_u = mean_u2 - (mean_u * mean_u);
             Real sigma_u = std::sqrt(std::max(var_u, Real(0.0)));
 
+            current_step++;
+            if (current_step % log_interval == 0) {
+                out_transient << current_step << " " << current_time << " " << mean_u << " "
+                              << var_u << "\n";
+            }
+
             Real mean_sin2phi = obs.sin2phi / N_grid;
             Real h_val = h0 + ha * std::cos(omega * current_time);
 

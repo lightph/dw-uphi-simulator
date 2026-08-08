@@ -39,7 +39,6 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
     out_transient.flush();
 
     unsigned long long current_step = 0;
-    unsigned long long log_interval = std::max(1ULL, (1ULL << max_power) / 10000ULL);
 
     unsigned long long acc_steps_max = 100000;
     if (std::abs(omega) > 1e-7) {
@@ -65,22 +64,38 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         std::cout << "Target total steps: " << target_steps << " | Batch steps: " << batch_steps
                   << " | Accumulating over last: " << acc_steps << "\n";
 
+        VectorReal d_mean_u_trans(transient_batch_steps > 0 ? transient_batch_steps : 1);
+        VectorReal d_mean_u2_trans(transient_batch_steps > 0 ? transient_batch_steps : 1);
+        VectorReal d_mean_sin2phi_trans(transient_batch_steps > 0 ? transient_batch_steps : 1);
+
+        if (transient_batch_steps > 0) {
+            Backend::fill_zero(d_mean_u_trans);
+            Backend::fill_zero(d_mean_u2_trans);
+            Backend::fill_zero(d_mean_sin2phi_trans);
+        }
+
+        // --- TRANSIENT PHASE: Entirely Asynchronous ---
         for (unsigned long long t = 0; t < transient_batch_steps; ++t) {
             sim.step(current_time);
-            current_step++;
-
-            if (current_step % log_interval == 0) {
-                auto obs = Backend::compute_observables(sim.get_state().u);
-                Real N_grid = static_cast<Real>(size);
-                Real mean_u = obs.u / N_grid;
-                Real mean_u2 = obs.u2 / N_grid;
-                Real var_u = mean_u2 - (mean_u * mean_u);
-                out_transient << current_step << " " << current_time << " " << mean_u << " "
-                              << var_u << "\n";
-                out_transient.flush();
-            }
+            Backend::record_observables_async(sim.get_state().u, d_mean_u_trans, d_mean_u2_trans,
+                                              d_mean_sin2phi_trans, t);
         }
-        Backend::synchronize();
+
+        if (transient_batch_steps > 0) {
+            Backend::synchronize();
+            auto host_mean_u = Backend::download_array(d_mean_u_trans);
+            auto host_mean_u2 = Backend::download_array(d_mean_u2_trans);
+
+            Real start_time = current_time - transient_batch_steps * dt;
+            for (unsigned long long t = 0; t < transient_batch_steps; ++t) {
+                current_step++;
+                Real mu = host_mean_u[t];
+                Real var = host_mean_u2[t] - (mu * mu);
+                out_transient << current_step << " " << start_time + (t + 1) * dt << " " << mu
+                              << " " << var << "\n";
+            }
+            out_transient.flush();
+        }
 
         Real sum_var_u = 0.0;
         Real sum_u_dot = 0.0;
@@ -90,8 +105,12 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         VectorReal ps_accum(size);
         Backend::fill_zero(ps_accum);
 
-        std::vector<Real> mean_u_series(acc_steps);
-        std::vector<Real> u_dot_series(acc_steps);
+        std::vector<Real> time_series;
+        std::vector<Real> mean_u_series;
+        std::vector<Real> u_dot_series;
+        time_series.reserve(acc_steps);
+        mean_u_series.reserve(acc_steps);
+        u_dot_series.reserve(acc_steps);
 
         std::size_t num_bins = 1000;
         Real hist_min = -10.0;
@@ -99,8 +118,10 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         VectorUll d_hist(num_bins);
         Backend::fill_zero_ull(d_hist);
 
+        // --- ACCUMULATION PHASE: Synchronous Evaluation ---
         for (unsigned long long t = 0; t < acc_steps; ++t) {
             sim.step(current_time);
+            current_step++;
 
             auto obs = Backend::compute_observables(sim.get_state().u);
             Real N_grid = static_cast<Real>(size);
@@ -110,12 +131,8 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             Real var_u = mean_u2 - (mean_u * mean_u);
             Real sigma_u = std::sqrt(std::max(var_u, Real(0.0)));
 
-            current_step++;
-            if (current_step % log_interval == 0) {
-                out_transient << current_step << " " << current_time << " " << mean_u << " "
-                              << var_u << "\n";
-                out_transient.flush();
-            }
+            out_transient << current_step << " " << current_time << " " << mean_u << " " << var_u
+                          << "\n";
 
             Real mean_sin2phi = obs.sin2phi / N_grid;
             Real h_val = h0 + ha * std::cos(omega * current_time);
@@ -123,8 +140,9 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             Real u_dot = 0.5 * (alpha * alpha * h_val + mean_sin2phi);
             Real phi_dot = 0.5 * (alpha * h_val - alpha * mean_sin2phi);
 
-            mean_u_series[t] = mean_u;
-            u_dot_series[t] = u_dot;
+            time_series.push_back(current_time);
+            mean_u_series.push_back(mean_u);
+            u_dot_series.push_back(u_dot);
 
             if (sigma_u > 0.0) {
                 Backend::accumulate_height_histogram(sim.get_state().u, mean_u, sigma_u, d_hist,
@@ -138,37 +156,42 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             Backend::accumulate_power_spectrum(sim.get_state().u_hat, ps_accum);
         }
 
-        Real avg_var_u = sum_var_u / acc_steps;
-        Real avg_u_dot = sum_u_dot / acc_steps;
-        Real avg_phi_dot = sum_phi_dot / acc_steps;
-        Real avg_entropy = sum_entropy / acc_steps;
+        if (acc_steps > 0) out_transient.flush();
 
-        out_summary << target_steps << " " << avg_var_u << " " << avg_u_dot << " " << avg_phi_dot
-                    << " " << avg_entropy << "\n";
-        out_summary.flush();
+        if (acc_steps > 0) {
+            Real avg_var_u = sum_var_u / acc_steps;
+            Real avg_u_dot = sum_u_dot / acc_steps;
+            Real avg_phi_dot = sum_phi_dot / acc_steps;
+            Real avg_entropy = sum_entropy / acc_steps;
 
-        std::vector<Real> host_ps = Backend::download_array(ps_accum);
-        std::string ps_file = output_prefix + "_ps_step_" + std::to_string(target_steps) + ".txt";
-        std::ofstream out_ps(ps_file);
-        out_ps << std::setprecision(std::numeric_limits<Real>::max_digits10);
-        out_ps << "k power\n";
+            out_summary << target_steps << " " << avg_var_u << " " << avg_u_dot << " "
+                        << avg_phi_dot << " " << avg_entropy << "\n";
+            out_summary.flush();
 
-        double dk = 2.0 * M_PI / L;
-        for (std::size_t i = 0; i < size; ++i) {
-            long long k_idx =
-                (i <= size / 2) ? i : static_cast<long long>(i) - static_cast<long long>(size);
-            double k_phys = k_idx * dk;
-            out_ps << k_phys << " " << (host_ps[i] / acc_steps) << "\n";
+            std::vector<Real> host_ps = Backend::download_array(ps_accum);
+            std::string ps_file =
+                output_prefix + "_ps_step_" + std::to_string(target_steps) + ".txt";
+            std::ofstream out_ps(ps_file);
+            out_ps << std::setprecision(std::numeric_limits<Real>::max_digits10);
+            out_ps << "k power\n";
+
+            double dk = 2.0 * M_PI / L;
+            for (std::size_t i = 0; i < size; ++i) {
+                long long k_idx =
+                    (i <= size / 2) ? i : static_cast<long long>(i) - static_cast<long long>(size);
+                double k_phys = k_idx * dk;
+                out_ps << k_phys << " " << (host_ps[i] / acc_steps) << "\n";
+            }
+            out_ps.close();
         }
-        out_ps.close();
 
         std::string ts_file =
             output_prefix + "_mean_u_ts_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_ts(ts_file);
         out_ts << std::setprecision(std::numeric_limits<Real>::max_digits10);
         out_ts << "time mean_u u_dot\n";
-        for (unsigned long long i = 0; i < acc_steps; ++i) {
-            out_ts << (i * dt) << " " << mean_u_series[i] << " " << u_dot_series[i] << "\n";
+        for (std::size_t i = 0; i < time_series.size(); ++i) {
+            out_ts << time_series[i] << " " << mean_u_series[i] << " " << u_dot_series[i] << "\n";
         }
         out_ts.close();
 
@@ -197,7 +220,6 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             output_prefix + "_real_state_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_state(state_file);
         out_state << std::setprecision(std::numeric_limits<Real>::max_digits10);
-
         out_state << "x Re(u) Im(u)\n";
 
         double dx = L / size;
@@ -206,6 +228,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         }
         out_state.close();
 
+        // --- INSTANTANEOUS SNAPSHOTS ---
         VectorReal inst_ps(size);
         Backend::fill_zero(inst_ps);
         Backend::accumulate_power_spectrum(sim.get_state().u_hat, inst_ps);
@@ -220,7 +243,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             long long k_idx =
                 (i <= size / 2) ? i : static_cast<long long>(i) - static_cast<long long>(size);
             double k_phys = k_idx * dk;
-            out_inst_ps << k_phys << " " << host_inst_ps[i] << "\n";  // Raw instantaneous value
+            out_inst_ps << k_phys << " " << host_inst_ps[i] << "\n";
         }
         out_inst_ps.close();
 

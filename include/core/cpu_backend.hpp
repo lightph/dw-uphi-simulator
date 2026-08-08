@@ -192,6 +192,27 @@ struct CpuBackend {
         const AlignedVector<unsigned long long>& vec) {
         return std::vector<unsigned long long>(vec.begin(), vec.end());
     }
+
+    static void record_observables_async(const ComplexVector& z, AlignedVector<Real>& d_mean_u,
+                                         AlignedVector<Real>& d_mean_u2,
+                                         AlignedVector<Real>& d_mean_sin2phi,
+                                         std::size_t step_idx) {
+        Real s_u = 0.0, s_u2 = 0.0, s_sin = 0.0;
+
+#pragma omp parallel for reduction(+ : s_u, s_u2, s_sin)
+        for (std::size_t i = 0; i < z.size(); ++i) {
+            Real u = z[i].real();
+            Real phi = -z[i].imag();
+            s_u += u;
+            s_u2 += u * u;
+            s_sin += std::sin(Real(2.0) * phi);
+        }
+
+        Real N = static_cast<Real>(z.size());
+        d_mean_u[step_idx] = s_u / N;
+        d_mean_u2[step_idx] = s_u2 / N;
+        d_mean_sin2phi[step_idx] = s_sin / N;
+    }
 };
 
 }  // namespace dw

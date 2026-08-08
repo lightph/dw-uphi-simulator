@@ -156,6 +156,43 @@ __global__ void accumulate_hist_kernel(const Complex* z, unsigned long long* his
     }
 }
 
+template <typename Real, typename Complex>
+__global__ void record_observables_kernel(const Complex* z, std::size_t size, Real* d_mean_u,
+                                          Real* d_mean_u2, std::size_t step_idx) {
+    extern __shared__ unsigned char shared_mem[];
+    Real* s_u = reinterpret_cast<Real*>(shared_mem);
+    Real* s_u2 = s_u + blockDim.x;
+
+    Real sum_u = 0.0;
+    Real sum_u2 = 0.0;
+
+    std::size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+    std::size_t stride = blockDim.x * gridDim.x;
+
+    for (std::size_t i = tid; i < size; i += stride) {
+        Real u = z[i].real();
+        sum_u += u;
+        sum_u2 += u * u;
+    }
+
+    s_u[threadIdx.x] = sum_u;
+    s_u2[threadIdx.x] = sum_u2;
+    __syncthreads();
+
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (threadIdx.x < s) {
+            s_u[threadIdx.x] += s_u[threadIdx.x + s];
+            s_u2[threadIdx.x] += s_u2[threadIdx.x + s];
+        }
+        __syncthreads();
+    }
+
+    if (threadIdx.x == 0) {
+        atomicAdd(&d_mean_u[step_idx], s_u[0] / static_cast<Real>(size));
+        atomicAdd(&d_mean_u2[step_idx], s_u2[0] / static_cast<Real>(size));
+    }
+}
+
 template <typename Precision>
 struct GpuBackend {
     using PrecisionType = Precision;
@@ -287,6 +324,16 @@ struct GpuBackend {
         cudaMemcpy(host_vec.data(), vec.data(), vec.size() * sizeof(unsigned long long),
                    cudaMemcpyDeviceToHost);
         return host_vec;
+    }
+
+    static void record_observables_async(const ComplexVector& z, CudaVector<Real>& d_mean_u_hist,
+                                         CudaVector<Real>& d_mean_u2_hist, std::size_t step_idx) {
+        int blockSize = 256;
+        int numBlocks = std::min(1024, static_cast<int>((z.size() + blockSize - 1) / blockSize));
+        std::size_t sharedMemSize = 2 * blockSize * sizeof(Real);
+
+        record_observables_kernel<Real, Complex><<<numBlocks, blockSize, sharedMemSize>>>(
+            z.data(), z.size(), d_mean_u_hist.data(), d_mean_u2_hist.data(), step_idx);
     }
 };
 

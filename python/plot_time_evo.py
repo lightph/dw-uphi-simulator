@@ -423,6 +423,39 @@ def main():
                 plt.tight_layout()
                 plt.savefig(os.path.join(inst_hist_out_dir, f'inst_hist_step_{step_int}.png'))
                 plt.close(fig)
+        # --- Process EW Data Collapse (Family-Vicsek Scaling) ---
+        if inst_spatial_data and not df_summary.empty:
+            # Map step integer to physical time
+            step_to_time = {}
+            transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
+            if os.path.exists(transient_file):
+                df_trans = pd.read_csv(transient_file, sep=' ', engine='c')
+                for _, row in df_trans.iterrows():
+                    step_to_time[int(row['step'])] = row['time']
+
+            plt.figure(figsize=(8, 6))
+            
+            # 1D Edwards-Wilkinson theoretical exponents
+            zeta = 0.5
+            z = 2.0
+            exponent_y = (1.0 + 2.0 * zeta) / z
+            exponent_x = 1.0 / z
+
+            for step_int, (k_vals, power_vals) in inst_spatial_data.items():
+                if step_int in step_to_time:
+                    t = step_to_time[step_int]
+                    if t > 0:
+                        y_collapsed = power_vals / (t ** exponent_y)
+                        x_collapsed = k_vals * (t ** exponent_x)
+                        plt.loglog(x_collapsed, y_collapsed, alpha=0.8, label=f"t = {t:.2f}")
+
+            plt.xlabel(r'$\kappa t^{1/z}$')
+            plt.ylabel(r'$S_\kappa(t) / t^{(1+2\zeta)/z}$')
+            plt.title('Family-Vicsek Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)')
+            plt.grid(True, which='both', linestyle='--', alpha=0.5)
+            plt.tight_layout()
+            plt.savefig(os.path.join(figures_dir, "ew_data_collapse.png"))
+            plt.close()
 
     print(f"Saved summary plots and individual step plots.")
 

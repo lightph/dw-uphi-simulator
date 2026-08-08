@@ -9,7 +9,13 @@ def main():
         print("Usage: python plot_sweep.py <base_prefix> [k_cutoff]")
         sys.exit(1)
 
-    base_prefix = sys.argv[1]
+    # 1. Resolve absolute path of the input data BEFORE changing directories
+    raw_prefix = sys.argv[1]
+    base_prefix = os.path.abspath(raw_prefix)
+    
+    # 2. Change the working directory to where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
     
     # Optional cutoff frequency argument (defaults to infinity if not provided)
     k_cutoff = float(sys.argv[2]) if len(sys.argv) > 2 else float('inf')
@@ -19,6 +25,14 @@ def main():
     if not os.path.exists(summary_file):
         print(f"Error: Summary file {summary_file} not found.")
         sys.exit(1)
+
+    # 3. Determine output figures directory based on data directory name
+    data_dir = os.path.dirname(base_prefix)
+    data_dir_name = os.path.basename(data_dir) # e.g., "sweep_1000.0(1)"
+    figures_dir = os.path.abspath(os.path.join("..", "figures", data_dir_name))
+    
+    os.makedirs(figures_dir, exist_ok=True)
+    print(f"Saving figures to: {figures_dir}")
 
     try:
         df_summary = pd.read_csv(summary_file, sep='\s+')
@@ -42,7 +56,7 @@ def main():
     plt.title('Spectral Entropy vs h0')
     plt.grid(True, which='both', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.savefig(f"{base_prefix}_entropy.png")
+    plt.savefig(os.path.join(figures_dir, "sweep_entropy.png"))
     plt.close()
 
     # 2. Plot Spatial Variance (Log Scale)
@@ -54,7 +68,7 @@ def main():
     plt.title('Spatial Variance vs h0')
     plt.grid(True, which='both', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.savefig(f"{base_prefix}_variance.png")
+    plt.savefig(os.path.join(figures_dir, "sweep_variance.png"))
     plt.close()
 
     # Plot u_dot
@@ -65,7 +79,7 @@ def main():
     plt.title('Average u_dot vs h0')
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.savefig(f"{base_prefix}_u_dot.png")
+    plt.savefig(os.path.join(figures_dir, "sweep_u_dot.png"))
     plt.close()
 
     # Plot phi_dot
@@ -76,11 +90,11 @@ def main():
     plt.title('Average phi_dot vs h0')
     plt.grid(True, linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.savefig(f"{base_prefix}_phi_dot.png")
+    plt.savefig(os.path.join(figures_dir, "sweep_phi_dot.png"))
     plt.close()
 
     # 3. Process Power Spectra with cutoff frequency
-    ps_dir = "power_spectra"
+    ps_dir = os.path.join(figures_dir, "power_spectra")
     os.makedirs(ps_dir, exist_ok=True)
     
     ps_files = glob.glob(f"{base_prefix}_ps_h0_*.txt")
@@ -131,7 +145,7 @@ def main():
         plt.savefig(out_name)
         plt.close()
 
-    print(f"Saved summary plots and populated power spectrum plots in directory: {ps_dir}/")
+    print(f"Saved summary plots and populated power spectrum plots in directory: {ps_dir}")
 
 if __name__ == "__main__":
     main()

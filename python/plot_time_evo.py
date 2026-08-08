@@ -65,13 +65,28 @@ def main():
         print("Usage: python plot_time.py <base_prefix> <k_cutoff>")
         sys.exit(1)
 
-    base_prefix = sys.argv[1]
+    # 1. Resolve absolute path of the input data BEFORE changing directories
+    raw_prefix = sys.argv[1]
+    base_prefix = os.path.abspath(raw_prefix)
+    
+    # 2. Change the working directory to where this script is located
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    os.chdir(script_dir)
+
     k_cutoff = float(sys.argv[2]) if len(sys.argv) > 2 else float('inf')
     summary_file = f"{base_prefix}{SUMMARY_FILE_SUFFIX}"
 
     if not os.path.exists(summary_file):
         print(f"Error: Summary file {summary_file} not found.")
         sys.exit(1)
+
+    # 3. Determine output figures directory based on data directory name
+    data_dir = os.path.dirname(base_prefix)
+    data_dir_name = os.path.basename(data_dir) # e.g., "time_evo_100000.0(1)"
+    figures_dir = os.path.abspath(os.path.join("..", "figures", data_dir_name))
+    
+    os.makedirs(figures_dir, exist_ok=True)
+    print(f"Saving figures and videos to: {figures_dir}")
 
     try:
         # Use fast C engine and exact space separator
@@ -99,7 +114,7 @@ def main():
         plt.title(title)
         plt.grid(True, which='both', linestyle='--', alpha=0.7)
         plt.tight_layout()
-        plt.savefig(f"{base_prefix}_time_{y_col}.png")
+        plt.savefig(os.path.join(figures_dir, f"time_{y_col}.png"))
         plt.close()
 
     plot_summary('spectral_entropy', LABEL_ENTROPY, TITLE_ENTROPY, log_y=True, marker='o', color='b')
@@ -123,9 +138,16 @@ def main():
         'pdf_max': 0.5
     }
 
-    os.makedirs(SPATIAL_PS_DIR, exist_ok=True)
-    os.makedirs(REAL_STATE_DIR, exist_ok=True)
-    os.makedirs(HISTOGRAM_DIR, exist_ok=True)
+    # Create subdirectories inside the new figures directory
+    spatial_ps_out_dir = os.path.join(figures_dir, SPATIAL_PS_DIR)
+    temporal_ps_out_dir = os.path.join(figures_dir, TEMPORAL_PS_DIR)
+    real_state_out_dir = os.path.join(figures_dir, REAL_STATE_DIR)
+    hist_out_dir = os.path.join(figures_dir, HISTOGRAM_DIR)
+
+    os.makedirs(spatial_ps_out_dir, exist_ok=True)
+    os.makedirs(temporal_ps_out_dir, exist_ok=True)
+    os.makedirs(real_state_out_dir, exist_ok=True)
+    os.makedirs(hist_out_dir, exist_ok=True)
 
     # 2. Extract and Plot Individual Power Spectra
     for step in df_summary['total_steps']:
@@ -165,7 +187,7 @@ def main():
                 plt.legend()
                 plt.grid(True, which='both', linestyle='--', alpha=0.5)
                 plt.tight_layout()
-                plt.savefig(os.path.join(SPATIAL_PS_DIR, f'ps_step_{step_int}.png'))
+                plt.savefig(os.path.join(spatial_ps_out_dir, f'ps_step_{step_int}.png'))
                 plt.close()
 
         # --- Process Temporal Power Spectrum ---
@@ -210,7 +232,7 @@ def main():
                     plt.legend()
                     plt.grid(True, which='both', linestyle='--', alpha=0.5)
                     plt.tight_layout()
-                    plt.savefig(os.path.join(TEMPORAL_PS_DIR, f'time_ps_u_dot_step_{step_int}.png'))
+                    plt.savefig(os.path.join(temporal_ps_out_dir, f'time_ps_u_dot_step_{step_int}.png'))
                     plt.close()
 
         # --- Process Real State ---
@@ -264,7 +286,7 @@ def main():
                 ax.set_title(f'Real Space State at step = {step_int}')
                 plt.grid(True, linestyle='--', alpha=0.5)
                 plt.tight_layout()
-                plt.savefig(os.path.join(REAL_STATE_DIR, f'real_state_step_{step_int}.png'))
+                plt.savefig(os.path.join(real_state_out_dir, f'real_state_step_{step_int}.png'))
                 plt.close(fig)
 
         # --- Process Pre-computed Histogram ---
@@ -293,7 +315,7 @@ def main():
                 ax.legend()
                 plt.grid(True, linestyle='--', alpha=0.5)
                 plt.tight_layout()
-                plt.savefig(os.path.join(HISTOGRAM_DIR, f'hist_step_{step_int}.png'))
+                plt.savefig(os.path.join(hist_out_dir, f'hist_step_{step_int}.png'))
                 plt.close(fig)
 
     print(f"Saved summary plots and individual step plots.")
@@ -334,7 +356,7 @@ def main():
             return line, ref_line
 
         ani = animation.FuncAnimation(fig, update_spat, frames=len(valid_steps), blit=False)
-        out_file = f"{base_prefix}_{VIDEO_SPATIAL_NAME}.{VIDEO_FORMAT}"
+        out_file = os.path.join(figures_dir, f"{VIDEO_SPATIAL_NAME}.{VIDEO_FORMAT}")
         writer = 'ffmpeg' if VIDEO_FORMAT == "mp4" else 'pillow'
         ani.save(out_file, writer=writer, fps=VIDEO_FPS)
         plt.close(fig)
@@ -366,7 +388,7 @@ def main():
             return line, ref_line
 
         ani = animation.FuncAnimation(fig, update_temp, frames=len(valid_steps), blit=False)
-        out_file = f"{base_prefix}_{VIDEO_TEMPORAL_NAME}.{VIDEO_FORMAT}"
+        out_file = os.path.join(figures_dir, f"{VIDEO_TEMPORAL_NAME}.{VIDEO_FORMAT}")
         writer = 'ffmpeg' if VIDEO_FORMAT == "mp4" else 'pillow'
         ani.save(out_file, writer=writer, fps=VIDEO_FPS)
         plt.close(fig)
@@ -412,7 +434,7 @@ def main():
             return lc,
             
         ani = animation.FuncAnimation(fig, update_real, frames=len(valid_steps), blit=False)
-        out_file = f"{base_prefix}_{VIDEO_REAL_NAME}.{VIDEO_FORMAT}"
+        out_file = os.path.join(figures_dir, f"{VIDEO_REAL_NAME}.{VIDEO_FORMAT}")
         writer = 'ffmpeg' if VIDEO_FORMAT == "mp4" else 'pillow'
         ani.save(out_file, writer=writer, fps=VIDEO_FPS)
         plt.close(fig)
@@ -445,7 +467,7 @@ def main():
             ax.grid(True, linestyle='--', alpha=0.5)
             
         ani = animation.FuncAnimation(fig, update_hist, frames=len(valid_steps), blit=False)
-        out_file = f"{base_prefix}_{VIDEO_HIST_NAME}.{VIDEO_FORMAT}"
+        out_file = os.path.join(figures_dir, f"{VIDEO_HIST_NAME}.{VIDEO_FORMAT}")
         writer = 'ffmpeg' if VIDEO_FORMAT == "mp4" else 'pillow'
         ani.save(out_file, writer=writer, fps=VIDEO_FPS)
         plt.close(fig)

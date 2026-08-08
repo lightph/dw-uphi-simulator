@@ -36,6 +36,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
     std::ofstream out_transient(transient_file);
     out_transient << std::setprecision(std::numeric_limits<Real>::max_digits10);
     out_transient << "step time mean_u var_u\n";
+    out_transient.flush();
 
     unsigned long long current_step = 0;
     unsigned long long log_interval = std::max(1ULL, (1ULL << max_power) / 10000ULL);
@@ -76,6 +77,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
                 Real var_u = mean_u2 - (mean_u * mean_u);
                 out_transient << current_step << " " << current_time << " " << mean_u << " "
                               << var_u << "\n";
+                out_transient.flush();
             }
         }
         Backend::synchronize();
@@ -112,6 +114,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             if (current_step % log_interval == 0) {
                 out_transient << current_step << " " << current_time << " " << mean_u << " "
                               << var_u << "\n";
+                out_transient.flush();
             }
 
             Real mean_sin2phi = obs.sin2phi / N_grid;

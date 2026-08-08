@@ -8,13 +8,13 @@ cd "$(dirname "$0")"
 EXEC="../build/bin/time_evo"
 
 # System parameters
-SIZE=131072
+SIZE=16384
 L=16384.0
 ALPHA=0.27
 H0=1.1       # Fixed h0 for the time evolution study
 HA=0.0
 OMEGA=0.0
-DT=0.3926990816987
+DT=4.0	#0.3926990816987
 MAX_POWER=30 # Will compute up to 2^22 steps
 
 # Hardware and output

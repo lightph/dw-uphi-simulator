@@ -158,6 +158,8 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
 
         if (acc_steps > 0) out_transient.flush();
 
+        double dk = 2.0 * M_PI / L;
+
         if (acc_steps > 0) {
             Real avg_var_u = sum_var_u / acc_steps;
             Real avg_u_dot = sum_u_dot / acc_steps;
@@ -239,7 +241,6 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         out_inst_ps << std::setprecision(std::numeric_limits<Real>::max_digits10);
         out_inst_ps << "k power\n";
 
-        double dk = 2.0 * M_PI / L;
         for (std::size_t i = 0; i < size; ++i) {
             long long k_idx =
                 (i <= size / 2) ? i : static_cast<long long>(i) - static_cast<long long>(size);

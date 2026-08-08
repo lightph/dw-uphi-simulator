@@ -8,8 +8,8 @@ cd "$(dirname "$0")"
 EXEC="../build/bin/time_evo"
 
 # System parameters
-SIZE=1000000
-L=100000.0
+SIZE=131072
+L=16384.0
 ALPHA=0.27
 H0=1.1       # Fixed h0 for the time evolution study
 HA=0.0

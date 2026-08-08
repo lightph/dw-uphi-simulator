@@ -156,9 +156,6 @@ __global__ void accumulate_hist_kernel(const Complex* z, unsigned long long* his
     }
 }
 
-namespace dw {
-
-// Safe atomic addition for both single and double precision
 __device__ __inline__ float safeAtomicAdd(float* address, float val) {
 #if defined(__CUDA_ARCH__)
     return atomicAdd(address, val);

@@ -17,6 +17,13 @@ TEMPORAL_PS_DIR = "time_power_spectra"
 REAL_STATE_DIR = "real_state_plots"
 HISTOGRAM_DIR = "u_histograms"
 
+# --- New Instantaneous & Transient Settings ---
+TRANSIENT_FILE_SUFFIX = "_transient_w2.txt"
+INST_SPATIAL_PS_DIR = "inst_power_spectra"
+INST_HISTOGRAM_DIR = "inst_u_histograms"
+VIDEO_INST_SPATIAL_NAME = "inst_spatial_evolution"
+VIDEO_INST_HIST_NAME = "inst_histogram_evolution"
+
 # --- Performance Settings ---
 MAX_PLOT_POINTS = 4096 # Aggressively downsample large arrays for memory/rendering speed
 
@@ -126,6 +133,8 @@ def main():
     temporal_data = {}
     real_state_data = {}
     hist_data = {}
+    inst_spatial_data = {}
+    inst_hist_data = {}
 
     # Track global limits for efficient video generation
     lims = {
@@ -143,11 +152,48 @@ def main():
     temporal_ps_out_dir = os.path.join(figures_dir, TEMPORAL_PS_DIR)
     real_state_out_dir = os.path.join(figures_dir, REAL_STATE_DIR)
     hist_out_dir = os.path.join(figures_dir, HISTOGRAM_DIR)
+    inst_spatial_ps_out_dir = os.path.join(figures_dir, INST_SPATIAL_PS_DIR)
+    inst_hist_out_dir = os.path.join(figures_dir, INST_HISTOGRAM_DIR)
 
     os.makedirs(spatial_ps_out_dir, exist_ok=True)
     os.makedirs(temporal_ps_out_dir, exist_ok=True)
     os.makedirs(real_state_out_dir, exist_ok=True)
     os.makedirs(hist_out_dir, exist_ok=True)
+    os.makedirs(inst_spatial_ps_out_dir, exist_ok=True)
+    os.makedirs(inst_hist_out_dir, exist_ok=True)
+
+    os.makedirs(spatial_ps_out_dir, exist_ok=True)
+    os.makedirs(temporal_ps_out_dir, exist_ok=True)
+    os.makedirs(real_state_out_dir, exist_ok=True)
+    os.makedirs(hist_out_dir, exist_ok=True)
+    
+    # --- Process Transient Variance (1D EW t^(1/2) Scaling) ---
+    transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
+    if os.path.exists(transient_file):
+        try:
+            df_trans = pd.read_csv(transient_file, sep=' ', engine='c')
+            if not df_trans.empty and len(df_trans) > 1:
+                df_trans = df_trans[df_trans['time'] > 0]
+                plt.figure(figsize=(8, 6))
+                plt.loglog(df_trans['time'], df_trans['var_u'], color='r', label="Simulated Variance (W^2)")
+                
+                t_vals = df_trans['time'].values
+                var_vals = df_trans['var_u'].values
+                if len(t_vals) > 0 and var_vals[-1] > 0:
+                    # Align the reference slope with the final simulated point
+                    c_t = var_vals[-1] / (t_vals[-1]**0.5)
+                    plt.loglog(t_vals, c_t * (t_vals**0.5), color='k', linestyle='--', label="t^(1/2) EW Scaling")
+                
+                plt.xlabel("Time (t)")
+                plt.ylabel("Spatial Variance W^2")
+                plt.title("Transient Spatial Variance vs Time (Log-Log)")
+                plt.legend()
+                plt.grid(True, which='both', linestyle='--', alpha=0.7)
+                plt.tight_layout()
+                plt.savefig(os.path.join(figures_dir, "transient_variance_scaling.png"))
+                plt.close()
+        except Exception as e:
+            print(f"Skipping transient plot: {e}")
 
     # 2. Extract and Plot Individual Power Spectra
     for step in df_summary['total_steps']:
@@ -278,7 +324,7 @@ def main():
                 ax.set_ylim(u_centered.min() - y_margin, u_centered.max() + y_margin)
                 
                 cbar = fig.colorbar(lc, ax=ax, ticks=[-np.pi, 0, np.pi])
-                cbar.ax.set_yticklabels(['$-\pi$', '0', '$\pi$'])
+                cbar.ax.set_yticklabels([r'$-\pi$', '0', '$\pi$'])
                 cbar.set_label('Phase')
                 
                 ax.set_xlabel('x')
@@ -288,6 +334,8 @@ def main():
                 plt.tight_layout()
                 plt.savefig(os.path.join(real_state_out_dir, f'real_state_step_{step_int}.png'))
                 plt.close(fig)
+                
+                
 
         # --- Process Pre-computed Histogram ---
         hist_file = f"{base_prefix}_height_hist_step_{step_int}.txt"
@@ -316,6 +364,64 @@ def main():
                 plt.grid(True, linestyle='--', alpha=0.5)
                 plt.tight_layout()
                 plt.savefig(os.path.join(hist_out_dir, f'hist_step_{step_int}.png'))
+                plt.close(fig)
+        # --- Process Instantaneous Spatial Power Spectrum ---
+        inst_ps_file = f"{base_prefix}_inst_ps_step_{step_int}.txt"
+        if os.path.exists(inst_ps_file):
+            df_inst_ps = pd.read_csv(inst_ps_file, sep=' ', engine='c')
+            df_inst_ps = df_inst_ps[(df_inst_ps['k'] > 0) & (df_inst_ps['k'] <= k_cutoff) & (df_inst_ps['power'] > 0)]
+            df_inst_ps = df_inst_ps.sort_values(by='k')
+
+            if not df_inst_ps.empty:
+                k_vals = df_inst_ps['k'].values
+                power_vals = df_inst_ps['power'].values
+                inst_spatial_data[step_int] = (k_vals, power_vals)
+
+                plt.figure(figsize=(8, 6))
+                plt.loglog(k_vals, power_vals, color='k', alpha=0.8, label="Instantaneous Data")
+                
+                c = (power_vals[0] * k_vals[0]**2) * POWER_LAW_OFFSET_SPATIAL
+                ref_power = c * (k_vals**-2)
+                plt.loglog(k_vals, ref_power, color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE)
+                
+                plt.xlabel(LABEL_SPATIAL_K)
+                plt.ylabel(LABEL_SPATIAL_POWER)
+                
+                title_str = f"Instantaneous Spatial PS at step = {step_int}"
+                if k_cutoff != float('inf'):
+                    title_str += f' (k cutoff = {k_cutoff})'
+                plt.title(title_str)
+                plt.legend()
+                plt.grid(True, which='both', linestyle='--', alpha=0.5)
+                plt.tight_layout()
+                plt.savefig(os.path.join(inst_spatial_ps_out_dir, f'inst_ps_step_{step_int}.png'))
+                plt.close()
+
+        # --- Process Instantaneous Histogram ---
+        inst_hist_file = f"{base_prefix}_inst_height_hist_step_{step_int}.txt"
+        if os.path.exists(inst_hist_file):
+            df_inst_hist = pd.read_csv(inst_hist_file, sep=' ', engine='c')
+            if not df_inst_hist.empty:
+                bin_centers = df_inst_hist['bin_center'].values
+                pdf = df_inst_hist['probability_density'].values
+                inst_hist_data[step_int] = (bin_centers, pdf)
+
+                fig, ax = plt.subplots(figsize=(8, 6))
+                width = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 0.1
+                ax.bar(bin_centers, pdf, width=width, alpha=0.6, color='blue', label='Instantaneous Data', align='center')
+                
+                x_gauss = np.linspace(-5, 5, 200)
+                y_gauss = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * x_gauss**2)
+                ax.plot(x_gauss, y_gauss, 'r--', linewidth=2, label='Standard Gaussian')
+                
+                ax.set_xlim(-5, 5)
+                ax.set_xlabel('(Re(u) - mean) / std')
+                ax.set_ylabel('Density')
+                ax.set_title(f'Instantaneous Histogram of Re(u) at step = {step_int}')
+                ax.legend(loc='upper right')
+                plt.grid(True, linestyle='--', alpha=0.5)
+                plt.tight_layout()
+                plt.savefig(os.path.join(inst_hist_out_dir, f'inst_hist_step_{step_int}.png'))
                 plt.close(fig)
 
     print(f"Saved summary plots and individual step plots.")
@@ -410,7 +516,7 @@ def main():
         ax.add_collection(lc)
         
         cbar = fig.colorbar(lc, ax=ax, ticks=[-np.pi, 0, np.pi])
-        cbar.ax.set_yticklabels(['$-\pi$', '0', '$\pi$'])
+        cbar.ax.set_yticklabels([r'$-\pi$', '0', '$\pi$'])
         cbar.set_label('Phase')
         
         ax.set_xlabel('x')
@@ -468,6 +574,75 @@ def main():
             
         ani = animation.FuncAnimation(fig, update_hist, frames=len(valid_steps), blit=False)
         out_file = os.path.join(figures_dir, f"{VIDEO_HIST_NAME}.{VIDEO_FORMAT}")
+        writer = 'ffmpeg' if VIDEO_FORMAT == "mp4" else 'pillow'
+        ani.save(out_file, writer=writer, fps=VIDEO_FPS)
+        plt.close(fig)
+        print(f"Saved {out_file}")
+        
+    # -- Instantaneous Spatial Video --
+    if inst_spatial_data:
+        valid_steps = sorted(list(inst_spatial_data.keys()))
+        fig, ax = plt.subplots(figsize=(8, 6))
+        line, = ax.loglog([], [], color='k', alpha=0.8, label="Instantaneous Data")
+        ref_line, = ax.loglog([], [], color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE)
+        
+        if FIX_AXES_FOR_VIDEO:
+            ax.set_xlim(lims['k_min'], lims['k_max'])
+            ax.set_ylim(lims['p_min'] * 0.1, lims['p_max'] * 10.0)
+
+        ax.set_xlabel(LABEL_SPATIAL_K)
+        ax.set_ylabel(LABEL_SPATIAL_POWER)
+        ax.grid(True, which='both', linestyle='--', alpha=0.5)
+        ax.legend()
+
+        def update_inst_spat(frame):
+            step_int = valid_steps[frame]
+            k, p = inst_spatial_data[step_int]
+            line.set_data(k, p)
+            c = (p[0] * k[0]**2) * POWER_LAW_OFFSET_SPATIAL
+            ref_line.set_data(k, c * (k**-2))
+            
+            title_str = f"Instantaneous Spatial PS at step = {step_int}"
+            if k_cutoff != float('inf'):
+                title_str += f' (k cutoff = {k_cutoff})'
+            ax.set_title(title_str)
+            return line, ref_line
+
+        ani = animation.FuncAnimation(fig, update_inst_spat, frames=len(valid_steps), blit=False)
+        out_file = os.path.join(figures_dir, f"{VIDEO_INST_SPATIAL_NAME}.{VIDEO_FORMAT}")
+        writer = 'ffmpeg' if VIDEO_FORMAT == "mp4" else 'pillow'
+        ani.save(out_file, writer=writer, fps=VIDEO_FPS)
+        plt.close(fig)
+        print(f"Saved {out_file}")
+
+    # -- Instantaneous Histogram Video --
+    if inst_hist_data:
+        valid_steps = sorted(list(inst_hist_data.keys()))
+        fig, ax = plt.subplots(figsize=(8, 6))
+        
+        x_gauss = np.linspace(-5, 5, 200)
+        y_gauss = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * x_gauss**2)
+        
+        def update_inst_hist(frame):
+            ax.clear()
+            step_int = valid_steps[frame]
+            bin_centers, pdf = inst_hist_data[step_int]
+            
+            width = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 0.1
+            ax.bar(bin_centers, pdf, width=width, alpha=0.6, color='blue', label='Instantaneous Data', align='center')
+            ax.plot(x_gauss, y_gauss, 'r--', linewidth=2, label='Standard Gaussian')
+            
+            ax.set_xlim(-5, 5)
+            y_max = lims['pdf_max'] if FIX_AXES_FOR_VIDEO else max(0.5, pdf.max() * 1.1)
+            ax.set_ylim(0, y_max)
+            ax.set_xlabel('(Re(u) - mean) / std')
+            ax.set_ylabel('Density')
+            ax.set_title(f'Instantaneous Histogram of Re(u) at step = {step_int}')
+            ax.legend(loc='upper right')
+            ax.grid(True, linestyle='--', alpha=0.5)
+            
+        ani = animation.FuncAnimation(fig, update_inst_hist, frames=len(valid_steps), blit=False)
+        out_file = os.path.join(figures_dir, f"{VIDEO_INST_HIST_NAME}.{VIDEO_FORMAT}")
         writer = 'ffmpeg' if VIDEO_FORMAT == "mp4" else 'pillow'
         ani.save(out_file, writer=writer, fps=VIDEO_FPS)
         plt.close(fig)

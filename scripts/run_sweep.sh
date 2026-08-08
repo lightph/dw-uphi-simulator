@@ -25,7 +25,7 @@ PRECISION="double"
 RANDOMIZE=1
 
 # Base output directory
-BASE_OUT_DIR="../output/sweep_${L}"
+BASE_OUT_DIR="../output/sweep_${L}_${H0}_${HA}_${OMEGA}"
 OUT_DIR="$BASE_OUT_DIR"
 
 # Incremental copy suffix logic

@@ -32,6 +32,14 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
     out_summary << std::setprecision(std::numeric_limits<Real>::max_digits10);
     out_summary << "total_steps var_u u_dot phi_dot spectral_entropy\n";
 
+    std::string transient_file = output_prefix + "_transient_w2.txt";
+    std::ofstream out_transient(transient_file);
+    out_transient << std::setprecision(std::numeric_limits<Real>::max_digits10);
+    out_transient << "step time mean_u var_u\n";
+
+    unsigned long long current_step = 0;
+    unsigned long long log_interval = std::max(1ULL, (1ULL << max_power) / 10000ULL);
+
     unsigned long long acc_steps_max = 100000;
     if (std::abs(omega) > 1e-7) {
         double period = 2.0 * M_PI / std::abs(omega);
@@ -58,6 +66,17 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
 
         for (unsigned long long t = 0; t < transient_batch_steps; ++t) {
             sim.step(current_time);
+            current_step++;
+
+            if (current_step % log_interval == 0) {
+                auto obs = Backend::compute_observables(sim.get_state().u);
+                Real N_grid = static_cast<Real>(size);
+                Real mean_u = obs.u / N_grid;
+                Real mean_u2 = obs.u2 / N_grid;
+                Real var_u = mean_u2 - (mean_u * mean_u);
+                out_transient << current_step << " " << current_time << " " << mean_u << " "
+                              << var_u << "\n";
+            }
         }
         Backend::synchronize();
 
@@ -177,6 +196,56 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             out_state << (i * dx) << " " << host_u[i].real() << " " << host_u[i].imag() << "\n";
         }
         out_state.close();
+
+        VectorReal inst_ps(size);
+        Backend::fill_zero(inst_ps);
+        Backend::accumulate_power_spectrum(sim.get_state().u_hat, inst_ps);
+        std::vector<Real> host_inst_ps = Backend::download_array(inst_ps);
+
+        std::string inst_ps_file =
+            output_prefix + "_inst_ps_step_" + std::to_string(target_steps) + ".txt";
+        std::ofstream out_inst_ps(inst_ps_file);
+        out_inst_ps << std::setprecision(std::numeric_limits<Real>::max_digits10);
+        out_inst_ps << "k power\n";
+        for (std::size_t i = 0; i < size; ++i) {
+            long long k_idx =
+                (i <= size / 2) ? i : static_cast<long long>(i) - static_cast<long long>(size);
+            double k_phys = k_idx * dk;
+            out_inst_ps << k_phys << " " << host_inst_ps[i] << "\n";  // Raw instantaneous value
+        }
+        out_inst_ps.close();
+
+        auto final_obs = Backend::compute_observables(sim.get_state().u);
+        Real inst_mean_u = final_obs.u / static_cast<Real>(size);
+        Real inst_mean_u2 = final_obs.u2 / static_cast<Real>(size);
+        Real inst_var_u = inst_mean_u2 - (inst_mean_u * inst_mean_u);
+        Real inst_sigma_u = std::sqrt(std::max(inst_var_u, Real(0.0)));
+
+        if (inst_sigma_u > 0.0) {
+            VectorUll inst_hist(num_bins);
+            Backend::fill_zero_ull(inst_hist);
+            Backend::accumulate_height_histogram(sim.get_state().u, inst_mean_u, inst_sigma_u,
+                                                 inst_hist, hist_min, hist_max);
+
+            std::vector<unsigned long long> h_inst_hist = Backend::download_array_ull(inst_hist);
+            std::string inst_hist_file =
+                output_prefix + "_inst_height_hist_step_" + std::to_string(target_steps) + ".txt";
+            std::ofstream out_inst_hist(inst_hist_file);
+            out_inst_hist << std::setprecision(std::numeric_limits<Real>::max_digits10);
+            out_inst_hist << "bin_center count probability_density\n";
+            unsigned long long inst_total_counts = 0;
+            for (auto c : h_inst_hist) inst_total_counts += c;
+
+            for (std::size_t i = 0; i < num_bins; ++i) {
+                Real bin_center = hist_min + (i + 0.5) * bin_width;
+                Real prob = inst_total_counts > 0 ? static_cast<Real>(h_inst_hist[i]) /
+                                                        static_cast<Real>(inst_total_counts)
+                                                  : 0.0;
+                out_inst_hist << bin_center << " " << h_inst_hist[i] << " " << (prob / bin_width)
+                              << "\n";
+            }
+            out_inst_hist.close();
+        }
 
         total_steps_done = target_steps;
         std::cout << "Finished step " << target_steps << " and saved to disk.\n";

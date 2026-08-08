@@ -24,7 +24,7 @@ SEED=42
 PRECISION="double"
 
 # Base output directory
-BASE_OUT_DIR="../output/time_evo_${L}"
+BASE_OUT_DIR="../output/time_evo_${L}_${H0}_${HA}_${OMEGA}"
 OUT_DIR="$BASE_OUT_DIR"
 
 # Incremental copy suffix logic

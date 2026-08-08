@@ -175,7 +175,6 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             out_ps << std::setprecision(std::numeric_limits<Real>::max_digits10);
             out_ps << "k power\n";
 
-            double dk = 2.0 * M_PI / L;
             for (std::size_t i = 0; i < size; ++i) {
                 long long k_idx =
                     (i <= size / 2) ? i : static_cast<long long>(i) - static_cast<long long>(size);
@@ -239,6 +238,8 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         std::ofstream out_inst_ps(inst_ps_file);
         out_inst_ps << std::setprecision(std::numeric_limits<Real>::max_digits10);
         out_inst_ps << "k power\n";
+
+        double dk = 2.0 * M_PI / L;
         for (std::size_t i = 0; i < size; ++i) {
             long long k_idx =
                 (i <= size / 2) ? i : static_cast<long long>(i) - static_cast<long long>(size);

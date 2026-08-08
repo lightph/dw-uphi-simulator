@@ -184,34 +184,6 @@ __device__ __inline__ double safeAtomicAdd(double* address, double val) {
 #endif
 }
 
-__device__ __inline__ float safeAtomicAdd(float* address, float val) {
-#if defined(__CUDA_ARCH__)
-    return atomicAdd(address, val);
-#else
-    return 0.0f;
-#endif
-}
-
-__device__ __inline__ double safeAtomicAdd(double* address, double val) {
-#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 600
-    // Software workaround for sm_52 and older
-    unsigned long long int* address_as_ull = (unsigned long long int*)address;
-    unsigned long long int old = *address_as_ull, assumed;
-    do {
-        assumed = old;
-        old = atomicCAS(address_as_ull, assumed,
-                        __double_as_longlong(val + __longlong_as_double(assumed)));
-    } while (assumed != old);
-    return __longlong_as_double(old);
-#elif defined(__CUDA_ARCH__)
-    // Native hardware support for sm_60 and newer
-    return atomicAdd(address, val);
-#else
-    // Dummy return to satisfy the host pass syntax checker
-    return 0.0;
-#endif
-}
-
 template <typename Real, typename Complex>
 __global__ void record_observables_kernel(const Complex* z, std::size_t size, Real* d_mean_u,
                                           Real* d_mean_u2, Real* d_mean_sin2phi,

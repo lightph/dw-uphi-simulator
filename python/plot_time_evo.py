@@ -3,6 +3,8 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.cm as cm
+import matplotlib.colors as mcolors
 import numpy as np
 from matplotlib.collections import LineCollection
 
@@ -161,11 +163,6 @@ def main():
     os.makedirs(hist_out_dir, exist_ok=True)
     os.makedirs(inst_spatial_ps_out_dir, exist_ok=True)
     os.makedirs(inst_hist_out_dir, exist_ok=True)
-
-    os.makedirs(spatial_ps_out_dir, exist_ok=True)
-    os.makedirs(temporal_ps_out_dir, exist_ok=True)
-    os.makedirs(real_state_out_dir, exist_ok=True)
-    os.makedirs(hist_out_dir, exist_ok=True)
     
     # --- Process Transient Variance (1D EW t^(1/2) Scaling) ---
     transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
@@ -335,8 +332,6 @@ def main():
                 plt.savefig(os.path.join(real_state_out_dir, f'real_state_step_{step_int}.png'))
                 plt.close(fig)
                 
-                
-
         # --- Process Pre-computed Histogram ---
         hist_file = f"{base_prefix}_height_hist_step_{step_int}.txt"
         if os.path.exists(hist_file):
@@ -365,6 +360,7 @@ def main():
                 plt.tight_layout()
                 plt.savefig(os.path.join(hist_out_dir, f'hist_step_{step_int}.png'))
                 plt.close(fig)
+
         # --- Process Instantaneous Spatial Power Spectrum ---
         inst_ps_file = f"{base_prefix}_inst_ps_step_{step_int}.txt"
         if os.path.exists(inst_ps_file):
@@ -423,39 +419,69 @@ def main():
                 plt.tight_layout()
                 plt.savefig(os.path.join(inst_hist_out_dir, f'inst_hist_step_{step_int}.png'))
                 plt.close(fig)
-        # --- Process EW Data Collapse (Family-Vicsek Scaling) ---
-        if inst_spatial_data and not df_summary.empty:
-            # Map step integer to physical time
-            step_to_time = {}
-            transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
-            if os.path.exists(transient_file):
-                df_trans = pd.read_csv(transient_file, sep=' ', engine='c')
-                for _, row in df_trans.iterrows():
-                    step_to_time[int(row['step'])] = row['time']
 
-            plt.figure(figsize=(8, 6))
+    # --- Process EW Data Collapse (Family-Vicsek Scaling) ---
+    if not df_summary.empty:
+        # Map step integer to physical time
+        step_to_time = {}
+        transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
+        if os.path.exists(transient_file):
+            df_trans = pd.read_csv(transient_file, sep=' ', engine='c')
+            for _, row in df_trans.iterrows():
+                step_to_time[int(row['step'])] = row['time']
+
+        # 1D Edwards-Wilkinson theoretical exponents
+        zeta = 0.5
+        z = 2.0
+        exponent_y = (1.0 + 2.0 * zeta) / z
+        exponent_x = 1.0 / z
+
+        def plot_ew_collapse(data_dict, title, filename):
+            if not data_dict:
+                return
             
-            # 1D Edwards-Wilkinson theoretical exponents
-            zeta = 0.5
-            z = 2.0
-            exponent_y = (1.0 + 2.0 * zeta) / z
-            exponent_x = 1.0 / z
+            # Gather valid times to configure the colormap
+            valid_times = [step_to_time[s] for s in data_dict.keys() if s in step_to_time and step_to_time[s] > 0]
+            if not valid_times:
+                return
 
-            for step_int, (k_vals, power_vals) in inst_spatial_data.items():
+            fig, ax = plt.subplots(figsize=(8, 6))
+            
+            # Setup colormap normalized to the logarithmic time scales
+            cmap = plt.get_cmap('plasma')
+            norm = mcolors.LogNorm(vmin=min(valid_times), vmax=max(valid_times))
+            sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+            sm.set_array([])
+
+            for step_int, (k_vals, power_vals) in data_dict.items():
                 if step_int in step_to_time:
                     t = step_to_time[step_int]
                     if t > 0:
                         y_collapsed = power_vals / (t ** exponent_y)
                         x_collapsed = k_vals * (t ** exponent_x)
-                        plt.loglog(x_collapsed, y_collapsed, alpha=0.8, label=f"t = {t:.2f}")
+                        color = cmap(norm(t))
+                        ax.loglog(x_collapsed, y_collapsed, alpha=0.8, color=color)
 
-            plt.xlabel(r'$\kappa t^{1/z}$')
-            plt.ylabel(r'$S_\kappa(t) / t^{(1+2\zeta)/z}$')
-            plt.title('Family-Vicsek Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)')
-            plt.grid(True, which='both', linestyle='--', alpha=0.5)
-            plt.tight_layout()
-            plt.savefig(os.path.join(figures_dir, "ew_data_collapse.png"))
-            plt.close()
+            cbar = fig.colorbar(sm, ax=ax)
+            cbar.set_label('Time (t)')
+
+            ax.set_xlabel(r'$\kappa t^{1/z}$')
+            ax.set_ylabel(r'$S_\kappa(t) / t^{(1+2\zeta)/z}$')
+            ax.set_title(title)
+            ax.grid(True, which='both', linestyle='--', alpha=0.5)
+            fig.tight_layout()
+            fig.savefig(os.path.join(figures_dir, filename))
+            plt.close(fig)
+
+        # 1. Generate Instantaneous Collapse Plot
+        plot_ew_collapse(inst_spatial_data, 
+                         'Instantaneous EW Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)', 
+                         'inst_ew_data_collapse.png')
+
+        # 2. Generate Time-Averaged Collapse Plot
+        plot_ew_collapse(spatial_data, 
+                         'Time-Averaged EW Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)', 
+                         'avg_ew_data_collapse.png')
 
     print(f"Saved summary plots and individual step plots.")
 
@@ -568,6 +594,7 @@ def main():
             if not FIX_AXES_FOR_VIDEO:
                 ax.set_xlim(x.min(), x.max())
                 y_margin = max(abs(u_c.min()), abs(u_c.max())) * 0.1
+                y_margin = 0.1 if y_margin == 0 else y_margin
                 ax.set_ylim(u_c.min() - y_margin, u_c.max() + y_margin)
                 
             return lc,

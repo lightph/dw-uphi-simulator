@@ -460,7 +460,11 @@ def main():
                         y_collapsed = power_vals / (t ** exponent_y)
                         x_collapsed = k_vals * (t ** exponent_x)
                         color = cmap(norm(t))
-                        ax.loglog(x_collapsed, y_collapsed, alpha=0.8, color=color)
+                        
+                        # Scale alpha from 0.2 (oldest) to 1.0 (newest)
+                        alpha_val = 0.2 + 0.8 * norm(t)
+                        
+                        ax.loglog(x_collapsed, y_collapsed, alpha=alpha_val, color=color)
 
             cbar = fig.colorbar(sm, ax=ax)
             cbar.set_label('Time (t)')

@@ -2,6 +2,10 @@
 build/
 compile_commands.json
 
+#output and figures
+output/
+figures/
+
 # Doxygen output
 docs/html/
 docs/latex/

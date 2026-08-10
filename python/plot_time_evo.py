@@ -8,6 +8,9 @@ import matplotlib.colors as mcolors
 import numpy as np
 from matplotlib.collections import LineCollection
 
+# Turn off interactive plotting to save overhead
+plt.ioff()
+
 # =============================================================================
 # CUSTOMIZATION VARIABLES
 # =============================================================================
@@ -85,21 +88,32 @@ def main():
     k_cutoff = float(sys.argv[2]) if len(sys.argv) > 2 else float('inf')
     summary_file = f"{base_prefix}{SUMMARY_FILE_SUFFIX}"
 
-    if not os.path.exists(summary_file):
+    # OPTIMIZATION 1: Read remote directory contents ONCE to avoid thousands of slow network os.path.exists() calls
+    data_dir = os.path.dirname(base_prefix)
+    prefix_basename = os.path.basename(base_prefix)
+    try:
+        available_files = set(os.listdir(data_dir))
+    except FileNotFoundError:
+        print(f"Error: Directory {data_dir} not found.")
+        sys.exit(1)
+        
+    def file_exists(suffix):
+        return (prefix_basename + suffix) in available_files
+
+    if not file_exists(SUMMARY_FILE_SUFFIX):
         print(f"Error: Summary file {summary_file} not found.")
         sys.exit(1)
 
     # 3. Determine output figures directory based on data directory name
-    data_dir = os.path.dirname(base_prefix)
-    data_dir_name = os.path.basename(data_dir) # e.g., "time_evo_100000.0(1)"
+    data_dir_name = os.path.basename(data_dir)
     figures_dir = os.path.abspath(os.path.join("..", "figures", data_dir_name))
     
     os.makedirs(figures_dir, exist_ok=True)
     print(f"Saving figures and videos to: {figures_dir}")
 
     try:
-        # Use fast C engine and exact space separator
-        df_summary = pd.read_csv(summary_file, sep=' ', engine='c')
+        # Use fast C engine and force float32 to save 50% memory
+        df_summary = pd.read_csv(summary_file, sep=' ', engine='c', dtype=np.float32)
     except pd.errors.EmptyDataError:
         print("The summary file is empty. Please wait for the first point to finish.")
         sys.exit(0)
@@ -157,18 +171,14 @@ def main():
     inst_spatial_ps_out_dir = os.path.join(figures_dir, INST_SPATIAL_PS_DIR)
     inst_hist_out_dir = os.path.join(figures_dir, INST_HISTOGRAM_DIR)
 
-    os.makedirs(spatial_ps_out_dir, exist_ok=True)
-    os.makedirs(temporal_ps_out_dir, exist_ok=True)
-    os.makedirs(real_state_out_dir, exist_ok=True)
-    os.makedirs(hist_out_dir, exist_ok=True)
-    os.makedirs(inst_spatial_ps_out_dir, exist_ok=True)
-    os.makedirs(inst_hist_out_dir, exist_ok=True)
+    for d in [spatial_ps_out_dir, temporal_ps_out_dir, real_state_out_dir, hist_out_dir, inst_spatial_ps_out_dir, inst_hist_out_dir]:
+        os.makedirs(d, exist_ok=True)
     
     # --- Process Transient Variance (1D EW t^(1/2) Scaling) ---
-    transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
-    if os.path.exists(transient_file):
+    if file_exists(TRANSIENT_FILE_SUFFIX):
         try:
-            df_trans = pd.read_csv(transient_file, sep=' ', engine='c')
+            transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
+            df_trans = pd.read_csv(transient_file, sep=' ', engine='c', dtype=np.float32)
             if not df_trans.empty and len(df_trans) > 1:
                 df_trans = df_trans[df_trans['time'] > 0]
                 plt.figure(figsize=(8, 6))
@@ -177,7 +187,6 @@ def main():
                 t_vals = df_trans['time'].values
                 var_vals = df_trans['var_u'].values
                 if len(t_vals) > 0 and var_vals[-1] > 0:
-                    # Align the reference slope with the final simulated point
                     c_t = var_vals[-1] / (t_vals[-1]**0.5)
                     plt.loglog(t_vals, c_t * (t_vals**0.5), color='k', linestyle='--', label="t^(1/2) EW Scaling")
                 
@@ -192,14 +201,26 @@ def main():
         except Exception as e:
             print(f"Skipping transient plot: {e}")
 
+    # OPTIMIZATION 2: Pre-allocate reusable figures outside the loop to stop memory fragmentation & CPU stalling
+    fig_spat, ax_spat = plt.subplots(figsize=(8, 6))
+    fig_temp, ax_temp = plt.subplots(figsize=(8, 6))
+    fig_real, ax_real = plt.subplots(figsize=(10, 6))
+    fig_hist, ax_hist = plt.subplots(figsize=(8, 6))
+    fig_inst_spat, ax_inst_spat = plt.subplots(figsize=(8, 6))
+    fig_inst_hist, ax_inst_hist = plt.subplots(figsize=(8, 6))
+    
+    # Static gaussian for histograms
+    x_gauss = np.linspace(-5, 5, 200).astype(np.float32)
+    y_gauss = ((1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * x_gauss**2)).astype(np.float32)
+
     # 2. Extract and Plot Individual Power Spectra
     for step in df_summary['total_steps']:
         step_int = int(step)
 
         # --- Process Spatial Power Spectrum ---
-        ps_file = f"{base_prefix}_ps_step_{step_int}.txt"
-        if os.path.exists(ps_file):
-            df_ps = pd.read_csv(ps_file, sep=' ', engine='c')
+        suffix_spat = f"_ps_step_{step_int}.txt"
+        if file_exists(suffix_spat):
+            df_ps = pd.read_csv(f"{base_prefix}{suffix_spat}", sep=' ', engine='c', dtype=np.float32)
             df_ps = df_ps[(df_ps['k'] > 0) & (df_ps['k'] <= k_cutoff) & (df_ps['power'] > 0)]
             df_ps = df_ps.sort_values(by='k')
 
@@ -213,39 +234,39 @@ def main():
                 lims['p_min'] = min(lims['p_min'], power_vals.min())
                 lims['p_max'] = max(lims['p_max'], power_vals.max())
 
-                plt.figure(figsize=(8, 6))
-                plt.loglog(k_vals, power_vals, color='k', alpha=0.8, label="Data")
+                ax_spat.clear()
+                ax_spat.loglog(k_vals, power_vals, color='k', alpha=0.8, label="Data")
                 
                 c = (power_vals[0] * k_vals[0]**2) * POWER_LAW_OFFSET_SPATIAL
                 ref_power = c * (k_vals**-2)
-                plt.loglog(k_vals, ref_power, color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE)
+                ax_spat.loglog(k_vals, ref_power, color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE)
                 
-                plt.xlabel(LABEL_SPATIAL_K)
-                plt.ylabel(LABEL_SPATIAL_POWER)
+                ax_spat.set_xlabel(LABEL_SPATIAL_K)
+                ax_spat.set_ylabel(LABEL_SPATIAL_POWER)
                 
                 title_str = TITLE_SPATIAL_PS.format(step=step_int)
                 if k_cutoff != float('inf'):
                     title_str += f' (k cutoff = {k_cutoff})'
-                plt.title(title_str)
-                plt.legend()
-                plt.grid(True, which='both', linestyle='--', alpha=0.5)
-                plt.tight_layout()
-                plt.savefig(os.path.join(spatial_ps_out_dir, f'ps_step_{step_int}.png'))
-                plt.close()
+                ax_spat.set_title(title_str)
+                ax_spat.legend()
+                ax_spat.grid(True, which='both', linestyle='--', alpha=0.5)
+                fig_spat.tight_layout()
+                fig_spat.savefig(os.path.join(spatial_ps_out_dir, f'ps_step_{step_int}.png'))
+            del df_ps # Aggressively free memory
 
         # --- Process Temporal Power Spectrum ---
-        ts_file = f"{base_prefix}_mean_u_ts_step_{step_int}.txt"
-        if os.path.exists(ts_file):
-            df_ts = pd.read_csv(ts_file, sep=' ', engine='c')
+        suffix_ts = f"_mean_u_ts_step_{step_int}.txt"
+        if file_exists(suffix_ts):
+            df_ts = pd.read_csv(f"{base_prefix}{suffix_ts}", sep=' ', engine='c', dtype=np.float32)
             
             if 'mean_u' in df_ts.columns and len(df_ts) > 1:
                 dt_step = df_ts['time'].iloc[1] - df_ts['time'].iloc[0]
                 n_samples = len(df_ts)
                 
-                window = np.hanning(n_samples)
+                window = np.hanning(n_samples).astype(np.float32)
                 fft_vals = np.fft.rfft(df_ts['mean_u'].values * window)
                 
-                fft_freqs_hz = np.fft.rfftfreq(n_samples, d=dt_step)
+                fft_freqs_hz = np.fft.rfftfreq(n_samples, d=dt_step).astype(np.float32)
                 omega = 2.0 * np.pi * fft_freqs_hz
                 
                 P_omega = ((np.abs(fft_vals) / n_samples)**2 * (8.0 / 3.0)) * (omega**2)
@@ -256,32 +277,31 @@ def main():
                 
                 if len(omega) > 0:
                     temporal_data[step_int] = (omega, P_omega)
-
                     lims['w_min'] = min(lims['w_min'], omega.min())
                     lims['w_max'] = max(lims['w_max'], omega.max())
                     lims['wp_min'] = min(lims['wp_min'], P_omega.min())
                     lims['wp_max'] = max(lims['wp_max'], P_omega.max())
 
-                    plt.figure(figsize=(8, 6))
-                    plt.loglog(omega, P_omega, color='purple', alpha=0.8, label="Data")
+                    ax_temp.clear()
+                    ax_temp.loglog(omega, P_omega, color='purple', alpha=0.8, label="Data")
                     
                     c_temp = (P_omega[0] * omega[0]**2) * POWER_LAW_OFFSET_TEMPORAL
                     ref_P_omega = c_temp * (omega**-2)
-                    plt.loglog(omega, ref_P_omega, color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE_TEMPORAL)
+                    ax_temp.loglog(omega, ref_P_omega, color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE_TEMPORAL)
 
-                    plt.xlabel(LABEL_TEMPORAL_W)
-                    plt.ylabel(LABEL_TEMPORAL_POWER)
-                    plt.title(TITLE_TEMPORAL_PS.format(step=step_int))
-                    plt.legend()
-                    plt.grid(True, which='both', linestyle='--', alpha=0.5)
-                    plt.tight_layout()
-                    plt.savefig(os.path.join(temporal_ps_out_dir, f'time_ps_u_dot_step_{step_int}.png'))
-                    plt.close()
+                    ax_temp.set_xlabel(LABEL_TEMPORAL_W)
+                    ax_temp.set_ylabel(LABEL_TEMPORAL_POWER)
+                    ax_temp.set_title(TITLE_TEMPORAL_PS.format(step=step_int))
+                    ax_temp.legend()
+                    ax_temp.grid(True, which='both', linestyle='--', alpha=0.5)
+                    fig_temp.tight_layout()
+                    fig_temp.savefig(os.path.join(temporal_ps_out_dir, f'time_ps_u_dot_step_{step_int}.png'))
+            del df_ts
 
         # --- Process Real State ---
-        state_file = f"{base_prefix}_real_state_step_{step_int}.txt"
-        if os.path.exists(state_file):
-            df_state = pd.read_csv(state_file, sep=' ', engine='c')
+        suffix_real = f"_real_state_step_{step_int}.txt"
+        if file_exists(suffix_real):
+            df_state = pd.read_csv(f"{base_prefix}{suffix_real}", sep=' ', engine='c', dtype=np.float32)
             if not df_state.empty:
                 x = df_state['x'].values
                 u_real = df_state['Re(u)'].values
@@ -307,35 +327,31 @@ def main():
                 points = np.array([x, u_centered]).T.reshape(-1, 1, 2)
                 segments = np.concatenate([points[:-1], points[1:]], axis=1)
                 
-                fig, ax = plt.subplots(figsize=(10, 6))
+                ax_real.clear()
                 norm = plt.Normalize(-np.pi, np.pi)
                 lc = LineCollection(segments, cmap='hsv', norm=norm)
                 lc.set_array(phase[:-1])
                 lc.set_linewidth(1.5)
                 
-                ax.add_collection(lc)
-                ax.set_xlim(x.min(), x.max())
+                ax_real.add_collection(lc)
+                ax_real.set_xlim(x.min(), x.max())
                 
                 y_margin = max(np.abs(u_centered.min()), np.abs(u_centered.max())) * 0.1
                 y_margin = 0.1 if y_margin == 0 else y_margin
-                ax.set_ylim(u_centered.min() - y_margin, u_centered.max() + y_margin)
+                ax_real.set_ylim(u_centered.min() - y_margin, u_centered.max() + y_margin)
                 
-                cbar = fig.colorbar(lc, ax=ax, ticks=[-np.pi, 0, np.pi])
-                cbar.ax.set_yticklabels([r'$-\pi$', '0', r'$\pi$'])
-                cbar.set_label('Phase')
-                
-                ax.set_xlabel('x')
-                ax.set_ylabel('Re(u) - mean(Re(u))')
-                ax.set_title(f'Real Space State at step = {step_int}')
-                plt.grid(True, linestyle='--', alpha=0.5)
-                plt.tight_layout()
-                plt.savefig(os.path.join(real_state_out_dir, f'real_state_step_{step_int}.png'))
-                plt.close(fig)
+                ax_real.set_xlabel('x')
+                ax_real.set_ylabel('Re(u) - mean(Re(u))')
+                ax_real.set_title(f'Real Space State at step = {step_int}')
+                ax_real.grid(True, linestyle='--', alpha=0.5)
+                fig_real.tight_layout()
+                fig_real.savefig(os.path.join(real_state_out_dir, f'real_state_step_{step_int}.png'))
+            del df_state
                 
         # --- Process Pre-computed Histogram ---
-        hist_file = f"{base_prefix}_height_hist_step_{step_int}.txt"
-        if os.path.exists(hist_file):
-            df_hist = pd.read_csv(hist_file, sep=' ', engine='c')
+        suffix_hist = f"_height_hist_step_{step_int}.txt"
+        if file_exists(suffix_hist):
+            df_hist = pd.read_csv(f"{base_prefix}{suffix_hist}", sep=' ', engine='c', dtype=np.float32)
             if not df_hist.empty:
                 bin_centers = df_hist['bin_center'].values
                 pdf = df_hist['probability_density'].values
@@ -343,28 +359,25 @@ def main():
 
                 lims['pdf_max'] = max(lims['pdf_max'], pdf.max() * 1.1)
                 
-                fig, ax = plt.subplots(figsize=(8, 6))
+                ax_hist.clear()
                 width = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 0.1
-                ax.bar(bin_centers, pdf, width=width, alpha=0.6, color='blue', label='Simulation Data', align='center')
+                ax_hist.bar(bin_centers, pdf, width=width, alpha=0.6, color='blue', label='Simulation Data', align='center')
+                ax_hist.plot(x_gauss, y_gauss, 'r--', linewidth=2, label='Standard Gaussian')
                 
-                x_gauss = np.linspace(-5, 5, 200)
-                y_gauss = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * x_gauss**2)
-                ax.plot(x_gauss, y_gauss, 'r--', linewidth=2, label='Standard Gaussian')
-                
-                ax.set_xlim(-5, 5)
-                ax.set_xlabel('(Re(u) - mean) / std')
-                ax.set_ylabel('Density')
-                ax.set_title(f'Normalized Histogram of Re(u) at step = {step_int}')
-                ax.legend()
-                plt.grid(True, linestyle='--', alpha=0.5)
-                plt.tight_layout()
-                plt.savefig(os.path.join(hist_out_dir, f'hist_step_{step_int}.png'))
-                plt.close(fig)
+                ax_hist.set_xlim(-5, 5)
+                ax_hist.set_xlabel('(Re(u) - mean) / std')
+                ax_hist.set_ylabel('Density')
+                ax_hist.set_title(f'Normalized Histogram of Re(u) at step = {step_int}')
+                ax_hist.legend()
+                ax_hist.grid(True, linestyle='--', alpha=0.5)
+                fig_hist.tight_layout()
+                fig_hist.savefig(os.path.join(hist_out_dir, f'hist_step_{step_int}.png'))
+            del df_hist
 
         # --- Process Instantaneous Spatial Power Spectrum ---
-        inst_ps_file = f"{base_prefix}_inst_ps_step_{step_int}.txt"
-        if os.path.exists(inst_ps_file):
-            df_inst_ps = pd.read_csv(inst_ps_file, sep=' ', engine='c')
+        suffix_inst_spat = f"_inst_ps_step_{step_int}.txt"
+        if file_exists(suffix_inst_spat):
+            df_inst_ps = pd.read_csv(f"{base_prefix}{suffix_inst_spat}", sep=' ', engine='c', dtype=np.float32)
             df_inst_ps = df_inst_ps[(df_inst_ps['k'] > 0) & (df_inst_ps['k'] <= k_cutoff) & (df_inst_ps['power'] > 0)]
             df_inst_ps = df_inst_ps.sort_values(by='k')
 
@@ -373,64 +386,62 @@ def main():
                 power_vals = df_inst_ps['power'].values
                 inst_spatial_data[step_int] = (k_vals, power_vals)
 
-                plt.figure(figsize=(8, 6))
-                plt.loglog(k_vals, power_vals, color='k', alpha=0.8, label="Instantaneous Data")
+                ax_inst_spat.clear()
+                ax_inst_spat.loglog(k_vals, power_vals, color='k', alpha=0.8, label="Instantaneous Data")
                 
                 c = (power_vals[0] * k_vals[0]**2) * POWER_LAW_OFFSET_SPATIAL
                 ref_power = c * (k_vals**-2)
-                plt.loglog(k_vals, ref_power, color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE)
+                ax_inst_spat.loglog(k_vals, ref_power, color=COLOR_REF_LINE, linestyle=STYLE_REF_LINE, label=LABEL_REF_LINE)
                 
-                plt.xlabel(LABEL_SPATIAL_K)
-                plt.ylabel(LABEL_SPATIAL_POWER)
+                ax_inst_spat.set_xlabel(LABEL_SPATIAL_K)
+                ax_inst_spat.set_ylabel(LABEL_SPATIAL_POWER)
                 
                 title_str = f"Instantaneous Spatial PS at step = {step_int}"
                 if k_cutoff != float('inf'):
                     title_str += f' (k cutoff = {k_cutoff})'
-                plt.title(title_str)
-                plt.legend()
-                plt.grid(True, which='both', linestyle='--', alpha=0.5)
-                plt.tight_layout()
-                plt.savefig(os.path.join(inst_spatial_ps_out_dir, f'inst_ps_step_{step_int}.png'))
-                plt.close()
+                ax_inst_spat.set_title(title_str)
+                ax_inst_spat.legend()
+                ax_inst_spat.grid(True, which='both', linestyle='--', alpha=0.5)
+                fig_inst_spat.tight_layout()
+                fig_inst_spat.savefig(os.path.join(inst_spatial_ps_out_dir, f'inst_ps_step_{step_int}.png'))
+            del df_inst_ps
 
         # --- Process Instantaneous Histogram ---
-        inst_hist_file = f"{base_prefix}_inst_height_hist_step_{step_int}.txt"
-        if os.path.exists(inst_hist_file):
-            df_inst_hist = pd.read_csv(inst_hist_file, sep=' ', engine='c')
+        suffix_inst_hist = f"_inst_height_hist_step_{step_int}.txt"
+        if file_exists(suffix_inst_hist):
+            df_inst_hist = pd.read_csv(f"{base_prefix}{suffix_inst_hist}", sep=' ', engine='c', dtype=np.float32)
             if not df_inst_hist.empty:
                 bin_centers = df_inst_hist['bin_center'].values
                 pdf = df_inst_hist['probability_density'].values
                 inst_hist_data[step_int] = (bin_centers, pdf)
 
-                fig, ax = plt.subplots(figsize=(8, 6))
+                ax_inst_hist.clear()
                 width = bin_centers[1] - bin_centers[0] if len(bin_centers) > 1 else 0.1
-                ax.bar(bin_centers, pdf, width=width, alpha=0.6, color='blue', label='Instantaneous Data', align='center')
+                ax_inst_hist.bar(bin_centers, pdf, width=width, alpha=0.6, color='blue', label='Instantaneous Data', align='center')
+                ax_inst_hist.plot(x_gauss, y_gauss, 'r--', linewidth=2, label='Standard Gaussian')
                 
-                x_gauss = np.linspace(-5, 5, 200)
-                y_gauss = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * x_gauss**2)
-                ax.plot(x_gauss, y_gauss, 'r--', linewidth=2, label='Standard Gaussian')
-                
-                ax.set_xlim(-5, 5)
-                ax.set_xlabel('(Re(u) - mean) / std')
-                ax.set_ylabel('Density')
-                ax.set_title(f'Instantaneous Histogram of Re(u) at step = {step_int}')
-                ax.legend(loc='upper right')
-                plt.grid(True, linestyle='--', alpha=0.5)
-                plt.tight_layout()
-                plt.savefig(os.path.join(inst_hist_out_dir, f'inst_hist_step_{step_int}.png'))
-                plt.close(fig)
+                ax_inst_hist.set_xlim(-5, 5)
+                ax_inst_hist.set_xlabel('(Re(u) - mean) / std')
+                ax_inst_hist.set_ylabel('Density')
+                ax_inst_hist.set_title(f'Instantaneous Histogram of Re(u) at step = {step_int}')
+                ax_inst_hist.legend(loc='upper right')
+                ax_inst_hist.grid(True, linestyle='--', alpha=0.5)
+                fig_inst_hist.tight_layout()
+                fig_inst_hist.savefig(os.path.join(inst_hist_out_dir, f'inst_hist_step_{step_int}.png'))
+            del df_inst_hist
+
+    # Close the static loop figures to free memory
+    for f in [fig_spat, fig_temp, fig_real, fig_hist, fig_inst_spat, fig_inst_hist]:
+        plt.close(f)
 
     # --- Process EW Data Collapse (Family-Vicsek Scaling) ---
     if not df_summary.empty:
-        # Map step integer to physical time
         step_to_time = {}
-        transient_file = f"{base_prefix}{TRANSIENT_FILE_SUFFIX}"
-        if os.path.exists(transient_file):
-            df_trans = pd.read_csv(transient_file, sep=' ', engine='c')
+        if file_exists(TRANSIENT_FILE_SUFFIX):
+            df_trans = pd.read_csv(f"{base_prefix}{TRANSIENT_FILE_SUFFIX}", sep=' ', engine='c', dtype=np.float32)
             for _, row in df_trans.iterrows():
                 step_to_time[int(row['step'])] = row['time']
 
-        # 1D Edwards-Wilkinson theoretical exponents
         zeta = 0.5
         z = 2.0
         exponent_y = (1.0 + 2.0 * zeta) / z
@@ -440,14 +451,11 @@ def main():
             if not data_dict:
                 return
             
-            # Gather valid times to configure the colormap
             valid_times = [step_to_time[s] for s in data_dict.keys() if s in step_to_time and step_to_time[s] > 0]
             if not valid_times:
                 return
 
             fig, ax = plt.subplots(figsize=(8, 6))
-            
-            # Setup colormap normalized to the logarithmic time scales
             cmap = plt.get_cmap('plasma')
             norm = mcolors.LogNorm(vmin=min(valid_times), vmax=max(valid_times))
             sm = cm.ScalarMappable(cmap=cmap, norm=norm)
@@ -460,15 +468,11 @@ def main():
                         y_collapsed = power_vals / (t ** exponent_y)
                         x_collapsed = k_vals * (t ** exponent_x)
                         color = cmap(norm(t))
-                        
-                        # Scale alpha from 0.2 (oldest) to 1.0 (newest)
                         alpha_val = 0.2 + 0.8 * norm(t)
-                        
                         ax.loglog(x_collapsed, y_collapsed, alpha=alpha_val, color=color)
 
             cbar = fig.colorbar(sm, ax=ax)
             cbar.set_label('Time (t)')
-
             ax.set_xlabel(r'$\kappa t^{1/z}$')
             ax.set_ylabel(r'$S_\kappa(t) / t^{(1+2\zeta)/z}$')
             ax.set_title(title)
@@ -477,15 +481,8 @@ def main():
             fig.savefig(os.path.join(figures_dir, filename))
             plt.close(fig)
 
-        # 1. Generate Instantaneous Collapse Plot
-        plot_ew_collapse(inst_spatial_data, 
-                         'Instantaneous EW Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)', 
-                         'inst_ew_data_collapse.png')
-
-        # 2. Generate Time-Averaged Collapse Plot
-        plot_ew_collapse(spatial_data, 
-                         'Time-Averaged EW Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)', 
-                         'avg_ew_data_collapse.png')
+        plot_ew_collapse(inst_spatial_data, 'Instantaneous EW Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)', 'inst_ew_data_collapse.png')
+        plot_ew_collapse(spatial_data, 'Time-Averaged EW Data Collapse (1D EW: $\zeta=0.5$, $z=2.0$)', 'avg_ew_data_collapse.png')
 
     print(f"Saved summary plots and individual step plots.")
 
@@ -615,9 +612,6 @@ def main():
         valid_steps = sorted(list(hist_data.keys()))
         fig, ax = plt.subplots(figsize=(8, 6))
         
-        x_gauss = np.linspace(-5, 5, 200)
-        y_gauss = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * x_gauss**2)
-        
         def update_hist(frame):
             ax.clear()
             step_int = valid_steps[frame]
@@ -683,9 +677,6 @@ def main():
     if inst_hist_data:
         valid_steps = sorted(list(inst_hist_data.keys()))
         fig, ax = plt.subplots(figsize=(8, 6))
-        
-        x_gauss = np.linspace(-5, 5, 200)
-        y_gauss = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * x_gauss**2)
         
         def update_inst_hist(frame):
             ax.clear()

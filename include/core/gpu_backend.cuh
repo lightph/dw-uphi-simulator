@@ -89,9 +89,8 @@ struct UPowerSpectrumOp {
         Real C = z_hat[i_neg].real();
         Real D = z_hat[i_neg].imag();
 
-        Real norm = Real(1.0) / static_cast<Real>(N);
-        Real real_u = Real(0.5) * (A + C) * norm;
-        Real imag_u = Real(0.5) * (B - D) * norm;
+        Real real_u = Real(0.5) * (A + C);
+        Real imag_u = Real(0.5) * (B - D);
         return real_u * real_u + imag_u * imag_u;
     }
 };
@@ -109,9 +108,8 @@ struct UEntropyOp {
         Real C = z_hat[i_neg].real();
         Real D = z_hat[i_neg].imag();
 
-        Real norm = Real(1.0) / static_cast<Real>(N);
-        Real real_u = Real(0.5) * (A + C) * norm;
-        Real imag_u = Real(0.5) * (B - D) * norm;
+        Real real_u = Real(0.5) * (A + C);
+        Real imag_u = Real(0.5) * (B - D);
         Real S = real_u * real_u + imag_u * imag_u;
 
         if (S > Real(0.0)) {

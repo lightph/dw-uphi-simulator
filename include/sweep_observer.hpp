@@ -7,6 +7,7 @@
 #include <iostream>
 
 #include "domain_wall.cuh"
+#include "sim_utils.hpp"
 
 namespace dw {
 
@@ -40,8 +41,10 @@ class SweepObserver {
         Real current_time = 0.0;
 
         std::cout << "Running transient for " << transient_steps << " steps..." << std::endl;
-        for (int step = 0; step < transient_steps; ++step) {
+        dw::utils::ProgressPrinter transient_progress(transient_steps, 20);
+        for (int step = 1; step <= transient_steps; ++step) {
             sim_.step(current_time);
+            transient_progress.print("Sweep Transient", step);
         }
 
         // Standard spatial metrics
@@ -69,6 +72,7 @@ class SweepObserver {
         int num_strobos = 0;
 
         std::cout << "Evaluating metrics for " << eval_steps << " steps..." << std::endl;
+        dw::utils::ProgressPrinter eval_progress(eval_steps, 20);
         for (int step = 1; step <= eval_steps; ++step) {
             Backend::copy(sim_.get_state().u.data(), sim_.get_state().u_prev.data(),
                           total_elements);
@@ -86,6 +90,7 @@ class SweepObserver {
                 Backend::copy(sim_.get_state().u.data(), d_u_strobo_prev.data(), total_elements);
                 num_strobos++;
             }
+            eval_progress.print("Sweep Eval", step);
         }
 
         Backend::synchronize();

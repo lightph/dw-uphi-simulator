@@ -65,14 +65,16 @@ class CufftBaseHandler {
     using CufftComplex = typename Precision::CufftComplex;
 
     size_t current_n_ = 0;
+    int current_batch_ = 0;
     cufftHandle fft_plan_ = 0;
 
     /// @brief Creates and allocates the cuFFT plan.
-    void createPlan(size_t N, cufftType planType) {
-        if (N == current_n_) return;
+    void createPlan(size_t N, int batch, cufftType planType) {
+        if (N == current_n_ && batch == current_batch_) return;
         cleanup();
+        CUFFT_CHECK(cufftPlan1d(&fft_plan_, N, planType, batch));
         current_n_ = N;
-        CUFFT_CHECK(cufftPlan1d(&fft_plan_, current_n_, planType, 1));
+        current_batch_ = batch;
     }
 
    public:
@@ -86,32 +88,38 @@ class CufftBaseHandler {
 
     // Enable moving
     CufftBaseHandler(CufftBaseHandler&& other) noexcept
-        : current_n_(other.current_n_), fft_plan_(other.fft_plan_) {
+        : current_n_(other.current_n_),
+          current_batch_(other.current_batch_),
+          fft_plan_(other.fft_plan_) {
         other.fft_plan_ = 0;
         other.current_n_ = 0;
+        other.current_batch_ = 0;
     }
 
     CufftBaseHandler& operator=(CufftBaseHandler&& other) noexcept {
         if (this != &other) {
             cleanup();
             current_n_ = other.current_n_;
+            current_batch_ = other.current_batch_;
             fft_plan_ = other.fft_plan_;
             other.fft_plan_ = 0;
             other.current_n_ = 0;
+            other.current_batch_ = 0;
         }
         return *this;
     }
 
     /// @brief Prepares the FFT plan for a specific size.
-    virtual void prepare(size_t N) = 0;
+    virtual void prepare(size_t N, int batch = 1) = 0;
 
-    /// @brief Cleans up and destroys the cuFFT plan.
+    /// @brief Cleans up and destroys the cuFFT planize_
     void cleanup() {
         if (fft_plan_ != 0) {
             cufftDestroy(fft_plan_);
             fft_plan_ = 0;
         }
         current_n_ = 0;
+        current_batch_ = 0;
     }
 
     /// @brief Gets the size of the current plan.
@@ -134,18 +142,17 @@ class CufftHandlerR2C : public CufftBaseHandler<Precision> {
     using CufftComplex = typename Precision::CufftComplex;
 
    public:
-    void prepare(size_t N) override { this->createPlan(N, CufftApi<Real>::R2C_PLAN); }
-
+    void prepare(size_t N, int batch = 1) override {
+        this->createPlan(N, batch, CufftApi<Real>::R2C_PLAN);
+    }
     /// @brief Executes the forward Real-to-Complex transform on Unified Memory.
-    void do_fft(const CudaVector<Real>& in, CudaVector<Complex>& out) {
+    void do_fft(const CudaVector<Real>& in, CudaVector<Complex>& out, size_t exact_N, int batch = 1,
+                cudaStream_t stream = nullptr) {
         if (in.empty()) return;
-
-        size_t N = in.size();
-        size_t out_size = (N / 2) + 1;
-
+        size_t out_size = ((exact_N / 2) + 1) * batch;
         if (out.size() != out_size) out.resize(out_size);
-        prepare(N);
-
+        prepare(exact_N, batch);
+        this->setStream(stream);
         CUFFT_CHECK(CufftApi<Real>::exec_r2c(
             this->fft_plan_, reinterpret_cast<CufftReal*>(const_cast<Real*>(in.data())),
             reinterpret_cast<CufftComplex*>(out.data())));
@@ -161,16 +168,18 @@ class CufftHandlerC2R : public CufftBaseHandler<Precision> {
     using CufftComplex = typename Precision::CufftComplex;
 
    public:
-    void prepare(size_t N) override { this->createPlan(N, CufftApi<Real>::C2R_PLAN); }
+    void prepare(size_t N, int batch = 1) override {
+        this->createPlan(N, batch, CufftApi<Real>::C2R_PLAN);
+    }
 
     /// @brief Executes the backward Complex-to-Real transform on Unified Memory.
-    void do_ifft(const CudaVector<Complex>& in, CudaVector<Real>& out) {
+    void do_ifft(const CudaVector<Complex>& in, CudaVector<Real>& out, size_t exact_N,
+                 int batch = 1, cudaStream_t stream = nullptr) {
         if (in.empty()) return;
-
-        size_t expected_N = (in.size() - 1) * 2;
+        size_t expected_N = exact_N * batch;
         if (out.size() != expected_N) out.resize(expected_N);
-
-        prepare(expected_N);
+        prepare(exact_N, batch);
+        this->setStream(stream);
 
         CUFFT_CHECK(CufftApi<Real>::exec_c2r(
             this->fft_plan_, reinterpret_cast<CufftComplex*>(const_cast<Complex*>(in.data())),
@@ -186,22 +195,28 @@ class CufftHandlerC2CIn : public CufftBaseHandler<Precision> {
     using CufftComplex = typename Precision::CufftComplex;
 
    public:
-    void prepare(size_t N) override { this->createPlan(N, CufftApi<Real>::C2C_PLAN); }
+    void prepare(size_t N, int batch = 1) override {
+        this->createPlan(N, batch, CufftApi<Real>::C2C_PLAN);
+    }
 
-    /// @brief Executes an in-place forward transform.
-    void do_fft(CudaVector<Complex>& in) {
+    /// @brief Executes an in-place forward batched transform.
+    void do_fft(CudaVector<Complex>& in, size_t exact_N, int batch = 1,
+                cudaStream_t stream = nullptr) {
         if (in.empty()) return;
-        prepare(in.size());
+        prepare(exact_N, batch);
+        this->setStream(stream);
 
         CUFFT_CHECK(
             CufftApi<Real>::exec_c2c(this->fft_plan_, reinterpret_cast<CufftComplex*>(in.data()),
                                      reinterpret_cast<CufftComplex*>(in.data()), CUFFT_FORWARD));
     }
 
-    /// @brief Executes an in-place inverse transform.
-    void do_ifft(CudaVector<Complex>& in) {
+    /// @brief Executes an in-place inverse batched transform.
+    void do_ifft(CudaVector<Complex>& in, size_t exact_N, int batch = 1,
+                 cudaStream_t stream = nullptr) {
         if (in.empty()) return;
-        prepare(in.size());
+        prepare(exact_N, batch);
+        this->setStream(stream);
 
         CUFFT_CHECK(
             CufftApi<Real>::exec_c2c(this->fft_plan_, reinterpret_cast<CufftComplex*>(in.data()),
@@ -217,26 +232,34 @@ class CufftHandlerC2COut : public CufftBaseHandler<Precision> {
     using CufftComplex = typename Precision::CufftComplex;
 
    public:
-    void prepare(size_t N) override { this->createPlan(N, CufftApi<Real>::C2C_PLAN); }
+    void prepare(size_t N, int batch = 1) override {
+        this->createPlan(N, batch, CufftApi<Real>::C2C_PLAN);
+    }
 
-    /// @brief Executes an out-of-place forward transform.
-    void do_fft(const CudaVector<Complex>& in, CudaVector<Complex>& out) {
+    /// @brief Executes an out-of-place forward batched transform.
+    void do_fft(const CudaVector<Complex>& in, CudaVector<Complex>& out, size_t exact_N,
+                int batch = 1, cudaStream_t stream = nullptr) {
         if (in.empty()) return;
-        size_t N = in.size();
-        if (out.size() != N) out.resize(N);
-        prepare(N);
+        size_t total_elements = exact_N * batch;
+        if (out.size() != total_elements) out.resize(total_elements);
+
+        prepare(exact_N, batch);
+        this->setStream(stream);
 
         CUFFT_CHECK(CufftApi<Real>::exec_c2c(
             this->fft_plan_, reinterpret_cast<CufftComplex*>(const_cast<Complex*>(in.data())),
             reinterpret_cast<CufftComplex*>(out.data()), CUFFT_FORWARD));
     }
 
-    /// @brief Executes an out-of-place inverse transform.
-    void do_ifft(const CudaVector<Complex>& in, CudaVector<Complex>& out) {
+    /// @brief Executes an out-of-place inverse batched transform.
+    void do_ifft(const CudaVector<Complex>& in, CudaVector<Complex>& out, size_t exact_N,
+                 int batch = 1, cudaStream_t stream = nullptr) {
         if (in.empty()) return;
-        size_t N = in.size();
-        if (out.size() != N) out.resize(N);
-        prepare(N);
+        size_t total_elements = exact_N * batch;
+        if (out.size() != total_elements) out.resize(total_elements);
+
+        prepare(exact_N, batch);
+        this->setStream(stream);
 
         CUFFT_CHECK(CufftApi<Real>::exec_c2c(
             this->fft_plan_, reinterpret_cast<CufftComplex*>(const_cast<Complex*>(in.data())),

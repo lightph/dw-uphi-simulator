@@ -43,6 +43,11 @@ if(USE_CUDA)
     )
 endif()
 
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # Disable PIE to allow linking against static libraries not compiled with -fPIC
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -no-pie")
+endif()
+
 # ==============================================================================
 # Dependencies
 # ==============================================================================

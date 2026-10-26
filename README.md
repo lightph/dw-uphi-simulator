@@ -1,37 +1,125 @@
-# Domain Wall Core (dw_core)
+# Domain Wall Simulator
 
-A high-performance, header-only C++/CUDA library for magnetic domain wall simulations. It provides an RAII-compliant abstraction layer over FFTW (CPU) and cuFFT (GPU) for efficient spectral computations.
+A high-performance, batched pseudospectral simulator for 1D domain wall dynamics. This project is designed to study the non-linear dynamics, stability, and phase transitions of domain walls under external driving fields. 
+
+The simulator features a unified API that seamlessly compiles for both **GPU (CUDA + cuFFT)** and **CPU (OpenMP + FFTW3)** backends, allowing for massive parallelization of parameter sweeps and time evolution analysis.
 
 ## Features
 
-* **Header-Only Architecture:** Designed as a CMake `INTERFACE` library (`dw_core`) for aggressive compiler inlining and seamless integration.
-* **Dual Execution Environments:** Support for CPU-based execution via OpenMP-accelerated FFTW3 and GPU-accelerated execution via NVIDIA cuFFT.
-* **Precision Toggling:** Configurable for single or double precision via CMake definitions.
-* **Memory Safety:** Implements standard C++ allocators to bridge SIMD-aligned C-style memory allocations with standard containers like `std::vector` and Thrust device vectors.
+- **Dual Backend Support:** Run on NVIDIA GPUs for maximum throughput or fallback to multi-core CPUs without changing the simulation code.
+- **Batched Execution:** Efficiently simulates multiple independent systems simultaneously using batched FFTs.
+- **Pseudospectral Stepper:** Highly accurate spatial derivatives and linear propagation in Fourier space.
+- **Advanced Observables:** On-the-fly computation of spatial variance (rugosity), spectral entropy, power spectra, histograms, central moments, and cumulants.
+- **Publication-Ready Plotting:** Python scripts configured for Physical Review B (PRB) style plots, including Floquet boundary overlays and Family-Vicsek scaling collapse.
 
-## Requirements
+## Prerequisites
 
-* C++17 or newer
-* CMake 3.15+
-* FFTW3 (with OpenMP support recommended)
-* CUDA Toolkit (if compiling with `HAS_CUDA`)
+### C++ Build Requirements
+- **CMake** (>= 3.19)
+- **C++17** compatible compiler (GCC, Clang, or MSVC)
+- **CUDA Toolkit** (>= 11.0, recommended 12.x) - *Required for GPU backend*
+- **FFTW3** (with OpenMP support: `fftw3`, `fftw3_omp`, `fftw3f`, `fftw3f_omp`) - *Required for CPU backend*
+- **OpenMP** - *Required for CPU backend*
+- **Doxygen** (Optional) - *Required for generating code documentation*
 
-## Usage and Integration
+### Python Plotting Requirements
+- Python 3.8+
+- `numpy`
+- `pandas`
+- `matplotlib`
 
-Because `dw_core` is header-only, you do not need to build it as a shared or static library. Include it in your project by linking against the interface target in your `CMakeLists.txt`:
-
-```cmake
-# Example integration
-add_executable(my_simulation main.cpp)
-target_link_libraries(my_simulation PRIVATE dw_core)
+You can install the Python dependencies via pip:
+```bash
+pip install numpy pandas matplotlib
 ```
 
-## Implementation Notes
+## Build Instructions
 
-### FFT Normalization
-The FFT handlers wrap the underlying C APIs closely for maximum performance. Consequently, forward and inverse transforms are **unnormalized**. 
+The project uses CMake to manage the build process. You can toggle between the GPU and CPU backends using the `USE_CUDA` CMake option.
 
-If you perform a forward transform followed immediately by an inverse transform, the resulting data will be scaled by a factor of `N` (the logical size of the array). The calling application is responsible for dividing the output by `N` to recover the original magnitudes.
+### Option A: Build for GPU (Default)
+This will compile the project using `nvcc` and link against the CUDA Runtime and cuFFT libraries.
 
-### Thread Safety and Plans
-FFTW and cuFFT plan generation is not inherently thread-safe. Plans should be prepared and managed by a single thread before executing the transforms in parallel or on a CUDA stream.
+```bash
+mkdir -p build
+cd build
+cmake .. -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+```
+
+### Option B: Build for CPU-Only
+This will compile the project using your standard C++ compiler and link against FFTW3 and OpenMP.
+
+```bash
+mkdir -p build-cpu
+cd build-cpu
+cmake .. -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
+```
+
+### Generating Documentation
+The codebase is fully documented using Doxygen. To generate the HTML and LaTeX documentation:
+
+```bash
+doxygen Doxyfile
+```
+You can then open `docs/html/index.html` in your web browser to view the API documentation.
+
+## Usage Instructions
+
+After building, the executables will be available in the `build/bin/` directory.
+
+### Running Simulations
+
+- **`sweep`**: Performs a 1D or 2D parameter sweep over the driving field parameters ($h_0$, $h_a$). Computes time-averaged observables to generate phase diagrams.
+  ```bash
+  ./bin/sweep <size> <L> <alpha> <omega> <dt> <transient_time> <eval_time> <h0_val> <ha_min> <ha_max> <ha_steps> <output_file>
+  ```
+
+- **`time_evo`**: Tracks the time evolution of a specific parameter set, outputting transient variance, instantaneous power spectra, and real-space state snapshots.
+  ```bash
+  ./bin/time_evo <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> <transient_time> <averaging_time> <window_time> <subsample_rate> <output_prefix> [eps] [seed] [precision]
+  ```
+
+- **`moments`**: Computes higher-order statistical moments and cumulants of the domain wall profile.
+- **`snapshots` / `movies`**: Generates raw data for visualizing the domain wall profile over time.
+- **`sat_check`**: Utility to check saturation and convergence of the system.
+
+### Data Analysis and Plotting
+
+The `python/` directory contains scripts to process the raw `.txt` outputs from the C++ executables and generate high-quality plots.
+
+**1. Plotting Parameter Sweeps**
+Generates phase diagrams, spectral entropy maps, and variance plots.
+```bash
+python python/plot_sweep.py <path_to_input_directory> <path_to_output_directory>
+```
+*Note: The input directory should contain the `results_h0_*.txt` files generated by the `sweep` executable.*
+
+**2. Plotting Time Evolution**
+Generates time-series plots, power spectra, histograms, and animated `.mp4` videos of the domain wall dynamics.
+```bash
+python python/plot_time_evo.py <path_to_base_prefix> [k_cutoff] [--override] [--outdir <path>]
+```
+- `<path_to_base_prefix>`: The prefix used when running `time_evo` (e.g., `output/time_data`).
+- `[k_cutoff]`: (Optional) Maximum wavenumber to plot in spatial power spectra.
+- `--override`: Force regeneration of all plots and videos.
+
+## Project Structure
+
+```text
+.
+├── CMakeLists.txt              # CMake build configuration
+├── include/
+│   ├── core/                   # Core backend logic (CPU/GPU abstractions)
+│   │   ├── cpu_backend.hpp     # OpenMP + FFTW implementation
+│   │   ├── gpu_backend.cuh     # CUDA + cuFFT implementation
+│   │   └── fft-handlers/       # Wrappers for cuFFT and FFTW
+│   ├── domain_wall.cuh         # Main simulation class
+│   ├── simulation_observer.hpp # Handles data collection and I/O
+│   ├── state.cuh               # Data structures for the physical state
+│   └── stepper.cuh             # Pseudospectral time integration
+├── src/                        # C++ Executable entry points
+├── python/                     # Data analysis and plotting scripts
+└── scripts/                    # Bash scripts for cluster submission (SGE/Slurm)
+```

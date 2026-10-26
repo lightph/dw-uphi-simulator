@@ -9,9 +9,13 @@
 #include <string>
 #include <vector>
 
+#include "cpu_backend.hpp"
+#include "fftw_precision.hpp"
+#ifdef HAS_CUDA
 #include "cuda_precision.cuh"
-#include "domain_wall.cuh"
 #include "gpu_backend.cuh"
+#endif
+#include "domain_wall.cuh"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -345,7 +349,7 @@ int main(int argc, char** argv) {
     if (argc < 14) {
         std::cerr << "Usage: " << argv[0] << " <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> "
                   << "<transient_time> <averaging_time> <window_time> <subsample_rate> "
-                  << "<output_prefix> [eps=0.05] [seed=42] [precision=double]\n";
+                  << "<output_prefix> [eps=0.05] [seed=42] [backend=gpu]\n";
         return 1;
     }
 
@@ -366,16 +370,21 @@ int main(int argc, char** argv) {
 
     double eps = (argc > 14) ? std::stod(argv[14]) : 0.05;
     unsigned int seed = (argc > 15) ? std::stoul(argv[15]) : 42;
-    std::string precision = (argc > 16) ? argv[16] : "double";
+    std::string backend = (argc > 16) ? argv[16] : "gpu";
 
-    if (precision == "single") {
-        run_time_evolution<dw::GpuBackend<dw::CudaSinglePrecision>>(
+    if (backend == "cpu") {
+        run_time_evolution<dw::CpuBackend<dw::FftwDoublePrecision>>(
             size, batch, L, alpha, h0, ha, omega, dt, transient_time, averaging_time, window_time,
             subsample_rate, eps, seed, output_prefix);
     } else {
+#ifdef HAS_CUDA
         run_time_evolution<dw::GpuBackend<dw::CudaDoublePrecision>>(
             size, batch, L, alpha, h0, ha, omega, dt, transient_time, averaging_time, window_time,
             subsample_rate, eps, seed, output_prefix);
+#else
+        std::cerr << "Error: GPU backend requested but CUDA is not enabled.\n";
+        return 1;
+#endif
     }
 
     return 0;

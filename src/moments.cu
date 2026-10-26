@@ -8,9 +8,13 @@
 #include <string>
 #include <vector>
 
+#include "cpu_backend.hpp"
+#include "fftw_precision.hpp"
+#ifdef HAS_CUDA
 #include "cuda_precision.cuh"
-#include "domain_wall.cuh"
 #include "gpu_backend.cuh"
+#endif
+#include "domain_wall.cuh"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -18,6 +22,7 @@
 
 namespace {
 
+#ifdef HAS_CUDA
 // Batched reduction kernels to evaluate moments for all batches simultaneously
 template <typename Real, typename Complex>
 __global__ void batched_mean_kernel(const Complex* u, Real* batch_sums, std::size_t size) {
@@ -103,6 +108,7 @@ __global__ void batched_moments_kernel(const Complex* u, const Real* batch_means
         dw::safeAtomicAdd(&mu5[b], s_mu5[0]);
     }
 }
+#endif
 
 }  // namespace
 
@@ -227,23 +233,61 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
             Backend::fill_zero(d_mu4.data(), batch);
             Backend::fill_zero(d_mu5.data(), batch);
 
-            int blocks_per_batch = std::min<int>(256, (size + 255) / 256);
-            dim3 grid(blocks_per_batch, batch);
-            int threads = 256;
-            std::size_t smem_mean = threads * sizeof(Real);
-            std::size_t smem_moments = 4 * threads * sizeof(Real);
+#ifdef HAS_CUDA
+            if constexpr (std::is_same_v<Backend, dw::GpuBackend<typename Backend::PrecisionType>>) {
+                int blocks_per_batch = std::min<int>(256, (size + 255) / 256);
+                dim3 grid(blocks_per_batch, batch);
+                int threads = 256;
+                std::size_t smem_mean = threads * sizeof(Real);
+                std::size_t smem_moments = 4 * threads * sizeof(Real);
 
-            batched_mean_kernel<Real, typename Backend::PrecisionType::Complex>
-                <<<grid, threads, smem_mean>>>(sim.get_state().u.data(), d_batch_means.data(),
-                                               size);
+                batched_mean_kernel<Real, typename Backend::PrecisionType::Complex>
+                    <<<grid, threads, smem_mean>>>(sim.get_state().u.data(), d_batch_means.data(),
+                                                   size);
 
-            normalize_mean_kernel<Real>
-                <<<(batch + 255) / 256, 256>>>(d_batch_means.data(), size, batch);
+                normalize_mean_kernel<Real>
+                    <<<(batch + 255) / 256, 256>>>(d_batch_means.data(), size, batch);
 
-            batched_moments_kernel<Real, typename Backend::PrecisionType::Complex>
-                <<<grid, threads, smem_moments>>>(sim.get_state().u.data(), d_batch_means.data(),
-                                                  d_mu2.data(), d_mu3.data(), d_mu4.data(),
-                                                  d_mu5.data(), size);
+                batched_moments_kernel<Real, typename Backend::PrecisionType::Complex>
+                    <<<grid, threads, smem_moments>>>(sim.get_state().u.data(), d_batch_means.data(),
+                                                      d_mu2.data(), d_mu3.data(), d_mu4.data(),
+                                                      d_mu5.data(), size);
+            } else
+#endif
+            {
+                // CPU fallback for batched moments
+                auto host_u = Backend::download_array(sim.get_state().u.data(), total_elements);
+                std::vector<Real> h_batch_means(batch, 0.0);
+                std::vector<Real> h_mu2(batch, 0.0), h_mu3(batch, 0.0), h_mu4(batch, 0.0), h_mu5(batch, 0.0);
+                
+                for (std::size_t b = 0; b < batch; ++b) {
+                    Real sum = 0.0;
+                    for (std::size_t i = 0; i < size; ++i) {
+                        sum += host_u[b * size + i].real();
+                    }
+                    h_batch_means[b] = sum / static_cast<Real>(size);
+                    
+                    Real m2 = 0.0, m3 = 0.0, m4 = 0.0, m5 = 0.0;
+                    for (std::size_t i = 0; i < size; ++i) {
+                        Real diff = host_u[b * size + i].real() - h_batch_means[b];
+                        Real d2 = diff * diff;
+                        Real d3 = d2 * diff;
+                        m2 += d2;
+                        m3 += d3;
+                        m4 += d2 * d2;
+                        m5 += d3 * d2;
+                    }
+                    h_mu2[b] = m2;
+                    h_mu3[b] = m3;
+                    h_mu4[b] = m4;
+                    h_mu5[b] = m5;
+                }
+                Backend::copy(h_batch_means.data(), d_batch_means.data(), batch);
+                Backend::copy(h_mu2.data(), d_mu2.data(), batch);
+                Backend::copy(h_mu3.data(), d_mu3.data(), batch);
+                Backend::copy(h_mu4.data(), d_mu4.data(), batch);
+                Backend::copy(h_mu5.data(), d_mu5.data(), batch);
+            }
 
             std::vector<Real> b_mean = Backend::download_array(d_batch_means.data(), batch);
             std::vector<Real> b_mu2 = Backend::download_array(d_mu2.data(), batch);
@@ -407,7 +451,7 @@ int main(int argc, char** argv) {
     if (argc < 14) {
         std::cerr << "Usage: " << argv[0] << " <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> "
                   << "<total_time> <start_time> <num_checkpoints> <num_sq_checkpoints> "
-                  << "<output_prefix> [eps=0.05] [seed=42] [precision=double]\n";
+                  << "<output_prefix> [eps=0.05] [seed=42] [backend=gpu]\n";
         return 1;
     }
 
@@ -428,16 +472,21 @@ int main(int argc, char** argv) {
 
     double eps = (argc > 14) ? std::stod(argv[14]) : 0.05;
     unsigned int seed = (argc > 15) ? std::stoul(argv[15]) : 42;
-    std::string precision = (argc > 16) ? argv[16] : "double";
+    std::string backend = (argc > 16) ? argv[16] : "gpu";
 
-    if (precision == "single") {
-        run_time_evolution<dw::GpuBackend<dw::CudaSinglePrecision>>(
+    if (backend == "cpu") {
+        run_time_evolution<dw::CpuBackend<dw::FftwDoublePrecision>>(
             size, batch, L, alpha, h0, ha, omega, dt, total_time, start_time, num_checkpoints,
             num_sq_checkpoints, eps, seed, output_prefix);
     } else {
+#ifdef HAS_CUDA
         run_time_evolution<dw::GpuBackend<dw::CudaDoublePrecision>>(
             size, batch, L, alpha, h0, ha, omega, dt, total_time, start_time, num_checkpoints,
             num_sq_checkpoints, eps, seed, output_prefix);
+#else
+        std::cerr << "Error: GPU backend requested but CUDA is not enabled.\n";
+        return 1;
+#endif
     }
 
     return 0;

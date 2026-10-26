@@ -6,9 +6,13 @@
 #include <string>
 #include <vector>
 
+#include "cpu_backend.hpp"
+#include "fftw_precision.hpp"
+#ifdef HAS_CUDA
 #include "cuda_precision.cuh"
-#include "domain_wall.hpp"
 #include "gpu_backend.cuh"
+#endif
+#include "domain_wall.cuh"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -44,7 +48,9 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
     std::cout << "Max accumulation steps (10000 periods cap): " << acc_steps_max << "\n"
               << std::endl;
 
-    dw::DomainWall<Backend> sim(size, L, alpha, h0, ha, omega, dt, eps, seed);
+    std::vector<double> h0_batch = {h0};
+    std::vector<double> ha_batch = {ha};
+    dw::DomainWall<Backend> sim(size, L, alpha, h0_batch, ha_batch, omega, dt, eps, seed);
     Real current_time = 0.0;
     Backend::synchronize();
 
@@ -65,22 +71,22 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         VectorReal d_mean_sin2phi_trans(transient_batch_steps > 0 ? transient_batch_steps : 1);
 
         if (transient_batch_steps > 0) {
-            Backend::fill_zero(d_mean_u_trans);
-            Backend::fill_zero(d_mean_u2_trans);
-            Backend::fill_zero(d_mean_sin2phi_trans);
+            Backend::fill_zero(d_mean_u_trans.data(), d_mean_u_trans.size());
+            Backend::fill_zero(d_mean_u2_trans.data(), d_mean_u2_trans.size());
+            Backend::fill_zero(d_mean_sin2phi_trans.data(), d_mean_sin2phi_trans.size());
         }
 
         // --- TRANSIENT PHASE: Entirely Asynchronous ---
         for (unsigned long long t = 0; t < transient_batch_steps; ++t) {
             sim.step(current_time);
-            Backend::record_observables_async(sim.get_state().u, d_mean_u_trans, d_mean_u2_trans,
-                                              d_mean_sin2phi_trans, t);
+            Backend::record_observables_async(sim.get_state().u.data(), size, d_mean_u_trans.data(), d_mean_u2_trans.data(),
+                                              d_mean_sin2phi_trans.data(), t);
         }
 
         if (transient_batch_steps > 0) {
             Backend::synchronize();
-            auto host_mean_u = Backend::download_array(d_mean_u_trans);
-            auto host_mean_u2 = Backend::download_array(d_mean_u2_trans);
+            auto host_mean_u = Backend::download_array(d_mean_u_trans.data(), d_mean_u_trans.size());
+            auto host_mean_u2 = Backend::download_array(d_mean_u2_trans.data(), d_mean_u2_trans.size());
 
             Real start_time = current_time - transient_batch_steps * dt;
             for (unsigned long long t = 0; t < transient_batch_steps; ++t) {
@@ -99,7 +105,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         Real sum_entropy = 0.0;
 
         VectorReal ps_accum(size);
-        Backend::fill_zero(ps_accum);
+        Backend::fill_zero(ps_accum.data(), ps_accum.size());
 
         std::vector<Real> time_series;
         std::vector<Real> mean_u_series;
@@ -112,14 +118,14 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         Real hist_min = -10.0;
         Real hist_max = 10.0;
         VectorUll d_hist(num_bins);
-        Backend::fill_zero_ull(d_hist);
+        Backend::fill_zero_ull(d_hist.data(), d_hist.size());
 
         // --- ACCUMULATION PHASE: Synchronous Evaluation ---
         for (unsigned long long t = 0; t < acc_steps; ++t) {
             sim.step(current_time);
             current_step++;
 
-            auto obs = Backend::compute_observables(sim.get_state().u);
+            auto obs = Backend::compute_observables(sim.get_state().u.data(), size);
             Real N_grid = static_cast<Real>(size);
 
             Real mean_u = obs.u / N_grid;
@@ -140,15 +146,15 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
             u_dot_series.push_back(u_dot);
 
             if (sigma_u > 0.0) {
-                Backend::accumulate_height_histogram(sim.get_state().u, mean_u, sigma_u, d_hist,
-                                                     hist_min, hist_max);
+                Backend::accumulate_height_histogram(sim.get_state().u.data(), size, mean_u, sigma_u, d_hist.data(),
+                                                     num_bins, hist_min, hist_max);
             }
 
             sum_var_u += var_u;
             sum_u_dot += u_dot;
             sum_phi_dot += phi_dot;
-            sum_entropy += Backend::compute_spectral_entropy(sim.get_state().u_hat);
-            Backend::accumulate_power_spectrum(sim.get_state().u_hat, ps_accum);
+            sum_entropy += Backend::compute_spectral_entropy(sim.get_state().u_hat.data(), size);
+            Backend::accumulate_power_spectrum(sim.get_state().u_hat.data(), ps_accum.data(), size);
         }
 
         if (acc_steps > 0) out_transient.flush();
@@ -165,7 +171,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
                         << avg_phi_dot << " " << avg_entropy << "\n";
             out_summary.flush();
 
-            std::vector<Real> host_ps = Backend::download_array(ps_accum);
+            std::vector<Real> host_ps = Backend::download_array(ps_accum.data(), ps_accum.size());
             std::string ps_file =
                 output_prefix + "_ps_step_" + std::to_string(target_steps) + ".txt";
             std::ofstream out_ps(ps_file);
@@ -191,7 +197,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         }
         out_ts.close();
 
-        std::vector<unsigned long long> h_hist = Backend::download_array_ull(d_hist);
+        std::vector<unsigned long long> h_hist = Backend::download_array_ull(d_hist.data(), d_hist.size());
         std::string hist_file =
             output_prefix + "_height_hist_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_hist(hist_file);
@@ -211,7 +217,7 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         }
         out_hist.close();
 
-        auto host_u = Backend::download_array(sim.get_state().u);
+        auto host_u = Backend::download_array(sim.get_state().u.data(), size);
         std::string state_file =
             output_prefix + "_real_state_step_" + std::to_string(target_steps) + ".txt";
         std::ofstream out_state(state_file);
@@ -226,9 +232,9 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
 
         // --- INSTANTANEOUS SNAPSHOTS ---
         VectorReal inst_ps(size);
-        Backend::fill_zero(inst_ps);
-        Backend::accumulate_power_spectrum(sim.get_state().u_hat, inst_ps);
-        std::vector<Real> host_inst_ps = Backend::download_array(inst_ps);
+        Backend::fill_zero(inst_ps.data(), inst_ps.size());
+        Backend::accumulate_power_spectrum(sim.get_state().u_hat.data(), inst_ps.data(), size);
+        std::vector<Real> host_inst_ps = Backend::download_array(inst_ps.data(), inst_ps.size());
 
         std::string inst_ps_file =
             output_prefix + "_inst_ps_step_" + std::to_string(target_steps) + ".txt";
@@ -244,18 +250,18 @@ void run_time_evolution(std::size_t size, double L, double alpha, double h0, dou
         }
         out_inst_ps.close();
 
-        auto final_obs = Backend::compute_observables(sim.get_state().u);
+        auto final_obs = Backend::compute_observables(sim.get_state().u.data(), size);
         Real inst_mean_u = final_obs.u / static_cast<Real>(size);
         Real inst_var_u = final_obs.var_sum / static_cast<Real>(size);
         Real inst_sigma_u = std::sqrt(std::max(inst_var_u, Real(0.0)));
 
         if (inst_sigma_u > 0.0) {
             VectorUll inst_hist(num_bins);
-            Backend::fill_zero_ull(inst_hist);
-            Backend::accumulate_height_histogram(sim.get_state().u, inst_mean_u, inst_sigma_u,
-                                                 inst_hist, hist_min, hist_max);
+            Backend::fill_zero_ull(inst_hist.data(), inst_hist.size());
+            Backend::accumulate_height_histogram(sim.get_state().u.data(), size, inst_mean_u, inst_sigma_u,
+                                                 inst_hist.data(), num_bins, hist_min, hist_max);
 
-            std::vector<unsigned long long> h_inst_hist = Backend::download_array_ull(inst_hist);
+            std::vector<unsigned long long> h_inst_hist = Backend::download_array_ull(inst_hist.data(), inst_hist.size());
             std::string inst_hist_file =
                 output_prefix + "_inst_height_hist_step_" + std::to_string(target_steps) + ".txt";
             std::ofstream out_inst_hist(inst_hist_file);
@@ -285,7 +291,7 @@ int main(int argc, char** argv) {
         std::cerr << "Usage: " << argv[0]
                   << " <size> <L> <alpha> <h0> <ha> <omega> <dt> <max_power> "
                      "<output_prefix> "
-                     "[eps=0.05] [seed=42] [precision=double]\n";
+                     "[eps=0.05] [seed=42] [backend=gpu]\n";
         return 1;
     }
 
@@ -301,14 +307,19 @@ int main(int argc, char** argv) {
 
     double eps = (argc > 10) ? std::stod(argv[10]) : 0.05;
     unsigned int seed = (argc > 11) ? std::stoul(argv[11]) : 42;
-    std::string precision = (argc > 12) ? argv[12] : "double";
+    std::string backend = (argc > 12) ? argv[12] : "gpu";
 
-    if (precision == "single") {
-        run_time_evolution<dw::GpuBackend<dw::CudaSinglePrecision>>(
+    if (backend == "cpu") {
+        run_time_evolution<dw::CpuBackend<dw::FftwDoublePrecision>>(
             size, L, alpha, h0, ha, omega, dt, max_power, eps, seed, output_prefix);
     } else {
+#ifdef HAS_CUDA
         run_time_evolution<dw::GpuBackend<dw::CudaDoublePrecision>>(
             size, L, alpha, h0, ha, omega, dt, max_power, eps, seed, output_prefix);
+#else
+        std::cerr << "Error: GPU backend requested but CUDA is not enabled.\n";
+        return 1;
+#endif
     }
 
     return 0;

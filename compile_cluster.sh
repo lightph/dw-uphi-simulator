@@ -3,7 +3,8 @@
 set -eo pipefail
 
 # 1. Purge system modules to prevent conflicts with the Conda environment
-module purge
+# Added '|| true' to prevent failure if the module command is not available in this shell
+module purge 2>/dev/null || true
 
 # 2. Activate the Conda environment containing your modern toolchain
 # Temporarily disable unbound variable checking to bypass Conda script bugs
@@ -13,8 +14,8 @@ conda activate cuda-build
 
 # 3. Auto-detect and download missing dependencies
 echo "-- Checking environment dependencies..."
-# Added a check for ccache alongside pkg-config and fftw
-if ! command -v pkg-config | grep -q "miniconda" || ! pkg-config --exists fftw3f &>/dev/null || ! command -v ccache | grep -q "miniconda"; then
+# Changed fftw3f to fftw3 since we moved to double precision exclusively
+if ! command -v pkg-config | grep -q "miniconda" || ! pkg-config --exists fftw3 &>/dev/null || ! command -v ccache | grep -q "miniconda"; then
   echo "-- Missing Conda dependencies detected. Auto-downloading 'fftw', 'pkg-config', and 'ccache'..."
   conda install -y -c conda-forge pkg-config fftw ccache
 else

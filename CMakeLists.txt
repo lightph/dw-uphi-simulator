@@ -59,9 +59,7 @@ find_package(Threads REQUIRED)
 # Always find CPU dependencies (FFTW3 and OpenMP)
 find_package(PkgConfig REQUIRED)
 find_package(OpenMP REQUIRED COMPONENTS CXX)
-pkg_check_modules(FFTW3_SP REQUIRED IMPORTED_TARGET fftw3f)
 pkg_check_modules(FFTW3_DP REQUIRED IMPORTED_TARGET fftw3)
-find_library(FFTW3F_OMP_LIB NAMES fftw3f_omp REQUIRED)
 find_library(FFTW3_OMP_LIB NAMES fftw3_omp REQUIRED)
 
 # Conditionally find GPU dependencies
@@ -83,9 +81,7 @@ target_include_directories(dw_core INTERFACE
 # Always link CPU dependencies
 target_link_libraries(dw_core INTERFACE 
     Threads::Threads
-    PkgConfig::FFTW3_SP 
     PkgConfig::FFTW3_DP
-    ${FFTW3F_OMP_LIB}
     ${FFTW3_OMP_LIB}
     OpenMP::OpenMP_CXX
 )

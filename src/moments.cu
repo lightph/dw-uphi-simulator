@@ -147,11 +147,11 @@ struct BatchedMomentsEvaluator {
             h_mu4[b] = m4;
             h_mu5[b] = m5;
         }
-        Backend::copy(h_batch_means.data(), d_batch_means, batch);
-        Backend::copy(h_mu2.data(), d_mu2, batch);
-        Backend::copy(h_mu3.data(), d_mu3, batch);
-        Backend::copy(h_mu4.data(), d_mu4, batch);
-        Backend::copy(h_mu5.data(), d_mu5, batch);
+        Backend::template copy<Real>(h_batch_means.data(), d_batch_means, batch);
+        Backend::template copy<Real>(h_mu2.data(), d_mu2, batch);
+        Backend::template copy<Real>(h_mu3.data(), d_mu3, batch);
+        Backend::template copy<Real>(h_mu4.data(), d_mu4, batch);
+        Backend::template copy<Real>(h_mu5.data(), d_mu5, batch);
     }
 };
 

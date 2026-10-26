@@ -20,7 +20,7 @@ cd "$SLURM_SUBMIT_DIR"
 # Ensure the logs directory exists so SLURM doesn't fail silently
 mkdir -p logs
 
-# Assuming this script lives in proyecto-v2/scripts, the project root is one level up
+# Assuming this script lives in proyecto-v3/scripts, the project root is one level up
 PROJECT_DIR="$(dirname "$PWD")"
 
 # Activate the python virtual environment

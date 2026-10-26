@@ -21,7 +21,7 @@ export CC="/share/apps/spack/instalaciones/linux-westmere/gcc-8.5.0-5sg556d/bin/
 export CXX="/share/apps/spack/instalaciones/linux-westmere/gcc-8.5.0-5sg556d/bin/g++"
 
 cd "$SLURM_SUBMIT_DIR"
-PROJECT_DIR="$HOME/inv1/proyecto-v2"
+PROJECT_DIR="$HOME/inv1/proyecto-v3"
 EXEC="${PROJECT_DIR}/build_slurm/bin/sweep"
 
 # --- System & Physics Parameters ---

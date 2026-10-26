@@ -17,7 +17,7 @@ module load cmake/3.24.2
 # Jump to the directory where the script was submitted from
 cd "$SLURM_SUBMIT_DIR"
 
-# Since this script lives in proyecto-v2/scripts, the project root is one level up
+# Since this script lives in proyecto-v3/scripts, the project root is one level up
 PROJECT_DIR="$(dirname "$PWD")"
 
 # 2. Activate the python virtual environment

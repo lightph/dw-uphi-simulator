@@ -22,7 +22,7 @@ module load mpfr/3.1.6-ubdztn6 gmp/6.3.0-blw24vo mpc/1.1.0-44wbkc3
 cd "$SLURM_SUBMIT_DIR"
 
 # Define project directory
-PROJECT_DIR="$HOME/inv1/proyecto-v2"
+PROJECT_DIR="$HOME/inv1/proyecto-v3"
 
 # Explicitly export CUDA and local FFTW library paths for runtime execution
 export LD_LIBRARY_PATH="/share/apps/spack/instalaciones/linux-westmere/cuda-11.1.0-z/lib64:${PROJECT_DIR}/fftw_local/lib:$LD_LIBRARY_PATH"

@@ -110,6 +110,76 @@ __global__ void batched_moments_kernel(const Complex* u, const Real* batch_means
 }
 #endif
 
+// Helper struct to dispatch batched moments evaluation based on the backend
+template <typename Backend>
+struct BatchedMomentsEvaluator {
+    using Real = typename Backend::PrecisionType::Real;
+    using Complex = typename Backend::PrecisionType::Complex;
+
+    static void evaluate(const Complex* u, Real* d_batch_means, Real* d_mu2, Real* d_mu3,
+                         Real* d_mu4, Real* d_mu5, std::size_t size, std::size_t batch) {
+        // CPU fallback for batched moments
+        std::size_t total_elements = size * batch;
+        auto host_u = Backend::download_array(u, total_elements);
+        std::vector<Real> h_batch_means(batch, 0.0);
+        std::vector<Real> h_mu2(batch, 0.0), h_mu3(batch, 0.0), h_mu4(batch, 0.0), h_mu5(batch, 0.0);
+        
+        for (std::size_t b = 0; b < batch; ++b) {
+            Real sum = 0.0;
+            for (std::size_t i = 0; i < size; ++i) {
+                sum += host_u[b * size + i].real();
+            }
+            h_batch_means[b] = sum / static_cast<Real>(size);
+            
+            Real m2 = 0.0, m3 = 0.0, m4 = 0.0, m5 = 0.0;
+            for (std::size_t i = 0; i < size; ++i) {
+                Real diff = host_u[b * size + i].real() - h_batch_means[b];
+                Real d2 = diff * diff;
+                Real d3 = d2 * diff;
+                m2 += d2;
+                m3 += d3;
+                m4 += d2 * d2;
+                m5 += d3 * d2;
+            }
+            h_mu2[b] = m2;
+            h_mu3[b] = m3;
+            h_mu4[b] = m4;
+            h_mu5[b] = m5;
+        }
+        Backend::copy(h_batch_means.data(), d_batch_means, batch);
+        Backend::copy(h_mu2.data(), d_mu2, batch);
+        Backend::copy(h_mu3.data(), d_mu3, batch);
+        Backend::copy(h_mu4.data(), d_mu4, batch);
+        Backend::copy(h_mu5.data(), d_mu5, batch);
+    }
+};
+
+#ifdef HAS_CUDA
+template <typename Precision>
+struct BatchedMomentsEvaluator<dw::GpuBackend<Precision>> {
+    using Real = typename Precision::Real;
+    using Complex = typename Precision::Complex;
+
+    static void evaluate(const Complex* u, Real* d_batch_means, Real* d_mu2, Real* d_mu3,
+                         Real* d_mu4, Real* d_mu5, std::size_t size, std::size_t batch) {
+        int blocks_per_batch = std::min<int>(256, static_cast<int>((size + 255) / 256));
+        dim3 grid(blocks_per_batch, batch);
+        int threads = 256;
+        std::size_t smem_mean = threads * sizeof(Real);
+        std::size_t smem_moments = 4 * threads * sizeof(Real);
+
+        batched_mean_kernel<Real, Complex>
+            <<<grid, threads, smem_mean>>>(u, d_batch_means, size);
+
+        normalize_mean_kernel<Real>
+            <<<(batch + 255) / 256, 256>>>(d_batch_means, size, batch);
+
+        batched_moments_kernel<Real, Complex>
+            <<<grid, threads, smem_moments>>>(u, d_batch_means, d_mu2, d_mu3, d_mu4, d_mu5, size);
+    }
+};
+#endif
+
 }  // namespace
 
 template <typename Backend>
@@ -233,61 +303,9 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
             Backend::fill_zero(d_mu4.data(), batch);
             Backend::fill_zero(d_mu5.data(), batch);
 
-#ifdef HAS_CUDA
-            if constexpr (std::is_same_v<Backend, dw::GpuBackend<typename Backend::PrecisionType>>) {
-                int blocks_per_batch = std::min<int>(256, (size + 255) / 256);
-                dim3 grid(blocks_per_batch, batch);
-                int threads = 256;
-                std::size_t smem_mean = threads * sizeof(Real);
-                std::size_t smem_moments = 4 * threads * sizeof(Real);
-
-                batched_mean_kernel<Real, typename Backend::PrecisionType::Complex>
-                    <<<grid, threads, smem_mean>>>(sim.get_state().u.data(), d_batch_means.data(),
-                                                   size);
-
-                normalize_mean_kernel<Real>
-                    <<<(batch + 255) / 256, 256>>>(d_batch_means.data(), size, batch);
-
-                batched_moments_kernel<Real, typename Backend::PrecisionType::Complex>
-                    <<<grid, threads, smem_moments>>>(sim.get_state().u.data(), d_batch_means.data(),
-                                                      d_mu2.data(), d_mu3.data(), d_mu4.data(),
-                                                      d_mu5.data(), size);
-            } else
-#endif
-            {
-                // CPU fallback for batched moments
-                auto host_u = Backend::download_array(sim.get_state().u.data(), total_elements);
-                std::vector<Real> h_batch_means(batch, 0.0);
-                std::vector<Real> h_mu2(batch, 0.0), h_mu3(batch, 0.0), h_mu4(batch, 0.0), h_mu5(batch, 0.0);
-                
-                for (std::size_t b = 0; b < batch; ++b) {
-                    Real sum = 0.0;
-                    for (std::size_t i = 0; i < size; ++i) {
-                        sum += host_u[b * size + i].real();
-                    }
-                    h_batch_means[b] = sum / static_cast<Real>(size);
-                    
-                    Real m2 = 0.0, m3 = 0.0, m4 = 0.0, m5 = 0.0;
-                    for (std::size_t i = 0; i < size; ++i) {
-                        Real diff = host_u[b * size + i].real() - h_batch_means[b];
-                        Real d2 = diff * diff;
-                        Real d3 = d2 * diff;
-                        m2 += d2;
-                        m3 += d3;
-                        m4 += d2 * d2;
-                        m5 += d3 * d2;
-                    }
-                    h_mu2[b] = m2;
-                    h_mu3[b] = m3;
-                    h_mu4[b] = m4;
-                    h_mu5[b] = m5;
-                }
-                Backend::copy(h_batch_means.data(), d_batch_means.data(), batch);
-                Backend::copy(h_mu2.data(), d_mu2.data(), batch);
-                Backend::copy(h_mu3.data(), d_mu3.data(), batch);
-                Backend::copy(h_mu4.data(), d_mu4.data(), batch);
-                Backend::copy(h_mu5.data(), d_mu5.data(), batch);
-            }
+            BatchedMomentsEvaluator<Backend>::evaluate(sim.get_state().u.data(), d_batch_means.data(),
+                                                       d_mu2.data(), d_mu3.data(), d_mu4.data(),
+                                                       d_mu5.data(), size, batch);
 
             std::vector<Real> b_mean = Backend::download_array(d_batch_means.data(), batch);
             std::vector<Real> b_mu2 = Backend::download_array(d_mu2.data(), batch);

@@ -4,27 +4,19 @@
 #include <iostream>
 #include <vector>
 
+#include "cpu_backend.hpp"
+#include "fftw_precision.hpp"
+#ifdef HAS_CUDA
 #include "cuda_memory.cuh"
 #include "cuda_precision.cuh"
-#include "domain_wall.cuh"
 #include "gpu_backend.cuh"
+#endif
+#include "domain_wall.cuh"
 
-int main(int argc, char** argv) {
-    using Backend = dw::GpuBackend<dw::CudaDoublePrecision>;
-
-    // Default physics parameters (can be overridden via CLI if needed)
-    std::size_t size = (argc > 1) ? std::stoull(argv[1]) : 1024;
-    double L = (argc > 2) ? std::stod(argv[2]) : 50.0;
-    double alpha = (argc > 3) ? std::stod(argv[3]) : 0.1;
-    double dt = (argc > 4) ? std::stod(argv[4]) : 0.01;
-
-    // Requested fixed parameters
+template <typename Backend>
+void run_saturation_check(std::size_t size, double L, double alpha, double dt, double omega, double eps, unsigned int seed) {
     std::vector<double> h0_batch = {4.0};
     std::vector<double> ha_batch = {0.0};
-
-    double omega = 1.0;
-    double eps = 0.0005;
-    unsigned int seed = 42;
 
     dw::DomainWall<Backend> sim(size, L, alpha, h0_batch, ha_batch, omega, dt, eps, seed);
 
@@ -37,8 +29,8 @@ int main(int argc, char** argv) {
     double next_checkpoint = 1.0;
     double max_time = std::pow(2.0, 20.0);
 
-    // Allocate metric accumulators on the device
-    dw::CudaVector<double> d_acc_vu(1), d_acc_vphi(1), d_acc_rugosity(1);
+    // Allocate metric accumulators
+    typename Backend::template Vector<double> d_acc_vu(1), d_acc_vphi(1), d_acc_rugosity(1);
     Backend::fill_zero(d_acc_vu.data(), 1);
     Backend::fill_zero(d_acc_vphi.data(), 1);
     Backend::fill_zero(d_acc_rugosity.data(), 1);
@@ -75,5 +67,30 @@ int main(int argc, char** argv) {
 
     out.close();
     std::cout << "Completed. Data saved to saturation_rugosity.txt\n";
+}
+
+int main(int argc, char** argv) {
+    // Default physics parameters (can be overridden via CLI if needed)
+    std::size_t size = (argc > 1) ? std::stoull(argv[1]) : 1024;
+    double L = (argc > 2) ? std::stod(argv[2]) : 50.0;
+    double alpha = (argc > 3) ? std::stod(argv[3]) : 0.1;
+    double dt = (argc > 4) ? std::stod(argv[4]) : 0.01;
+    std::string backend = (argc > 5) ? argv[5] : "gpu";
+
+    double omega = 1.0;
+    double eps = 0.0005;
+    unsigned int seed = 42;
+
+    if (backend == "cpu") {
+        run_saturation_check<dw::CpuBackend<dw::FftwDoublePrecision>>(size, L, alpha, dt, omega, eps, seed);
+    } else {
+#ifdef HAS_CUDA
+        run_saturation_check<dw::GpuBackend<dw::CudaDoublePrecision>>(size, L, alpha, dt, omega, eps, seed);
+#else
+        std::cerr << "Error: GPU backend requested but CUDA is not enabled.\n";
+        return 1;
+#endif
+    }
+
     return 0;
 }

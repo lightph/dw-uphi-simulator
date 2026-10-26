@@ -6,7 +6,6 @@
 #include <iomanip>
 #include <iostream>
 
-#include "cuda_memory.cuh"
 #include "domain_wall.cuh"
 
 namespace dw {
@@ -16,6 +15,8 @@ class SweepObserver {
    public:
     using Real = typename Backend::PrecisionType::Real;
     using Complex = typename Backend::PrecisionType::Complex;
+    using VectorReal = typename Backend::template Vector<Real>;
+    using VectorComplex = typename Backend::template Vector<Complex>;
 
     SweepObserver(DomainWall<Backend>& sim, const std::string& output_file)
         : sim_(sim), out_(output_file) {
@@ -44,15 +45,15 @@ class SweepObserver {
         }
 
         // Standard spatial metrics
-        CudaVector<Real> d_acc_vu(batch);
-        CudaVector<Real> d_acc_vphi(batch);
-        CudaVector<Real> d_acc_rugosity(batch);
+        VectorReal d_acc_vu(batch);
+        VectorReal d_acc_vphi(batch);
+        VectorReal d_acc_rugosity(batch);
 
         // Stroboscopic temporal metrics
         std::size_t total_elements = size * batch;
-        CudaVector<Real> d_acc_step(total_elements);
-        CudaVector<Real> d_acc_step2(total_elements);
-        CudaVector<Complex> d_u_strobo_prev(total_elements);
+        VectorReal d_acc_step(total_elements);
+        VectorReal d_acc_step2(total_elements);
+        VectorComplex d_u_strobo_prev(total_elements);
 
         Backend::fill_zero(d_acc_vu.data(), batch);
         Backend::fill_zero(d_acc_vphi.data(), batch);
@@ -96,10 +97,10 @@ class SweepObserver {
     DomainWall<Backend>& sim_;
     std::ofstream out_;
 
-    void process_and_save(int eval_steps, int num_strobos, const CudaVector<Real>& d_acc_vu,
-                          const CudaVector<Real>& d_acc_vphi,
-                          const CudaVector<Real>& d_acc_rugosity,
-                          const CudaVector<Real>& d_acc_step, const CudaVector<Real>& d_acc_step2) {
+    void process_and_save(int eval_steps, int num_strobos, const VectorReal& d_acc_vu,
+                          const VectorReal& d_acc_vphi,
+                          const VectorReal& d_acc_rugosity,
+                          const VectorReal& d_acc_step, const VectorReal& d_acc_step2) {
         std::size_t size = sim_.get_size();
         std::size_t batch = sim_.get_batch();
         Real L = sim_.get_L();  // Fixed: Fetch dynamic length
@@ -115,7 +116,7 @@ class SweepObserver {
         auto ha_batch = sim_.get_ha_batch();
 
         // Fixed: Allocate device memory once outside the batch loop
-        CudaVector<Real> d_ps(size);
+        VectorReal d_ps(size);
 
         for (std::size_t b = 0; b < batch; ++b) {
             Real avg_vu = h_vu[b] / static_cast<Real>(eval_steps);

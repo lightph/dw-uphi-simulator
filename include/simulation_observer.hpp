@@ -7,7 +7,6 @@
 #include <string>
 #include <vector>
 
-#include "cuda_memory.cuh"
 #include "domain_wall.cuh"
 
 namespace dw {
@@ -16,6 +15,7 @@ template <typename Backend>
 class SimulationObserver {
    public:
     using Real = typename Backend::PrecisionType::Real;
+    using VectorReal = typename Backend::template Vector<Real>;
 
     SimulationObserver(DomainWall<Backend>& sim, const std::string& output_file)
         : sim_(sim), out_(output_file), current_time_(0.0) {
@@ -33,9 +33,9 @@ class SimulationObserver {
         std::size_t batches = sim_.get_batch();
 
         // Allocate device buffers to hold interval history without stalling the CPU
-        CudaVector<Real> d_mean_u(batches * output_interval);
-        CudaVector<Real> d_mean_u2(batches * output_interval);
-        CudaVector<Real> d_mean_sin(batches * output_interval);
+        VectorReal d_mean_u(batches * output_interval);
+        VectorReal d_mean_u2(batches * output_interval);
+        VectorReal d_mean_sin(batches * output_interval);
 
         std::vector<Real> h_val_history;
         h_val_history.reserve(output_interval);

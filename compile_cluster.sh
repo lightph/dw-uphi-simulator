@@ -6,23 +6,30 @@ set -eo pipefail
 module purge
 
 # 2. Activate the Conda environment containing your modern toolchain
-# Temporarily disable unbound variable checking to bypass the Conda script bug
+# Temporarily disable unbound variable checking to bypass Conda script bugs
 set +u
 source "$HOME/miniconda/bin/activate"
 conda activate cuda-build
+
+# 3. Auto-detect and download missing dependencies
+echo "-- Checking environment dependencies..."
+# Added a check for ccache alongside pkg-config and fftw
+if ! command -v pkg-config | grep -q "miniconda" || ! pkg-config --exists fftw3f &>/dev/null || ! command -v ccache | grep -q "miniconda"; then
+  echo "-- Missing Conda dependencies detected. Auto-downloading 'fftw', 'pkg-config', and 'ccache'..."
+  conda install -y -c conda-forge pkg-config fftw ccache
+else
+  echo "-- Dependencies found."
+fi
+
+# Re-enable unbound variable checking only AFTER all Conda interactions are done
 set -u
 
-# 3. Setup the build directory
+# 4. Setup the build directory
 BUILD_DIR="build_slurm"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-# 4. Clean previous CMake cache artifacts
-rm -rf CMakeCache.txt CMakeFiles/
-
-# 5. Configure and build
-# 86 targets Ampere (RTX 3080, A10)
-# 120 targets Blackwell (RTX 5070, 5070 Ti)
+# 5. Configure and build (Incremental)
 cmake .. \
   -DUSE_CUDA=ON \
   -DCMAKE_CUDA_ARCHITECTURES="86-real;86-virtual;120-real;120-virtual"

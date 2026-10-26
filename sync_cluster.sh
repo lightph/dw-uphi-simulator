@@ -4,7 +4,7 @@
 LOCAL_DIR="$HOME/Documents/Investigación 1/proyecto-v2/"
 REMOTE_USER="luz.perez"
 REMOTE_HOST="10.73.25.233"
-REMOTE_DIR="/home/luz.perez/inv1/proyecto-v2/"
+REMOTE_DIR="/home/luz.perez/inv1/proyecto-v3/"
 
 echo "Syncing $LOCAL_DIR to cluster..."
 

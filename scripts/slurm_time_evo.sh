@@ -47,7 +47,7 @@ MAX_POWER=30
 # --- Shared Hardware and Output Parameters ---
 EPS=0.05
 SEED=42
-PRECISION="double"
+BACKEND="gpu"
 
 # --- Varying Parameters based on Array Task ID ---
 case $SLURM_ARRAY_TASK_ID in
@@ -94,7 +94,7 @@ echo "Num    : dt=$DT | max_power=$MAX_POWER | size=$SIZE"
 echo "Saving outputs to: $OUT_DIR"
 echo "=========================================================="
 
-# Execute (Note: $BACKEND argument is removed because the new binary is pure GPU)
-time $EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER $PREFIX $EPS $SEED $PRECISION
+# Execute
+time $EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER "$PREFIX" $EPS $SEED $BACKEND
 
 echo "Time evolution complete for $LABEL."

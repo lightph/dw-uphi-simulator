@@ -21,7 +21,6 @@ MAX_POWER=30 # Will compute up to 2^22 steps
 BACKEND="gpu"
 EPS=0.05
 SEED=42
-PRECISION="double"
 
 # Base output directory
 BASE_OUT_DIR="../output/time_evo_${L}_${H0}_${HA}_${OMEGA}"
@@ -38,9 +37,9 @@ done
 mkdir -p "$OUT_DIR"
 PREFIX="${OUT_DIR}/time_data"
 
-echo "Starting time evolution in double precision..."
+echo "Starting time evolution..."
 echo "Saving outputs to: $OUT_DIR"
 
-$EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER $BACKEND $PREFIX $EPS $SEED $PRECISION
+$EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER "$PREFIX" $EPS $SEED $BACKEND
 
 echo "Time evolution complete."

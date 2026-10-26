@@ -23,7 +23,6 @@ MAX_TIME_POWER=15
 BACKEND="gpu"
 EPS=0.05
 SEED=42
-PRECISION="double"
 
 # Base output directory for the time step test
 BASE_OUT_DIR="../output/dt_dependence_${L}_${H0}"
@@ -62,7 +61,7 @@ for k in {3..-8}; do
     PREFIX="${DT_DIR}/time_data"
     
     # Execute the C++ code
-    $EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER $BACKEND $PREFIX $EPS $SEED $PRECISION
+    $EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER "$PREFIX" $EPS $SEED $BACKEND
     
 done
 

@@ -38,6 +38,7 @@ EXEC="${PROJECT_DIR}/build_slurm/bin/main"
 
 # --- Shared System Parameters ---
 SIZE=16384
+BATCH=1
 L=8192.0
 ALPHA=0.27
 OMEGA=1.0
@@ -52,7 +53,7 @@ SUBSAMPLE_RATE=16
 # --- Shared Hardware and Output Parameters ---
 EPS=0.05
 SEED=42
-PRECISION="double"
+BACKEND="gpu"
 LABEL="NC"
 
 # --- Varying Parameters based on Array Task ID ---
@@ -94,6 +95,7 @@ Job ID: $SLURM_JOB_ID
 Array Task: $SLURM_ARRAY_TASK_ID
 Label: $LABEL
 Size: $SIZE
+Batch: $BATCH
 L: $L
 Alpha: $ALPHA
 H0: $H0
@@ -106,19 +108,19 @@ Window Time: $WINDOW_TIME
 Subsample Rate: $SUBSAMPLE_RATE
 Eps: $EPS
 Seed: $SEED
-Precision: $PRECISION
+Backend: $BACKEND
 EOF
 
 echo "=========================================================="
 echo "Running configuration: $LABEL (Task $SLURM_ARRAY_TASK_ID)"
 echo "Physics: H0=$H0 | HA=$HA | OMEGA=$OMEGA | L=$L | ALPHA=$ALPHA"
 echo "Time   : transient=$TRANSIENT_TIME | avg=$AVERAGING_TIME | window=$WINDOW_TIME | subs=$SUBSAMPLE_RATE | dt=$DT"
-echo "Grid   : size=$SIZE"
+echo "Grid   : size=$SIZE | batch=$BATCH"
 echo "Saving outputs to: $OUT_DIR"
 echo "Parameters saved to: $PARAM_FILE"
 echo "=========================================================="
 
 # Execute
-time $EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $TRANSIENT_TIME $AVERAGING_TIME $WINDOW_TIME $SUBSAMPLE_RATE $PREFIX $EPS $SEED $PRECISION
+time $EXEC $SIZE $BATCH $L $ALPHA $H0 $HA $OMEGA $DT $TRANSIENT_TIME $AVERAGING_TIME $WINDOW_TIME $SUBSAMPLE_RATE "$PREFIX" $EPS $SEED $BACKEND
 
 echo "Time evolution complete for $LABEL (Task $SLURM_ARRAY_TASK_ID)."

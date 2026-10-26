@@ -35,7 +35,6 @@ MAX_POWER=30
 BACKEND="gpu"
 EPS=0.05
 SEED=42
-PRECISION="double"
 
 # --- Varying Parameters based on Array Task ID ---
 case $SGE_TASK_ID in
@@ -83,6 +82,6 @@ echo "Saving outputs to: $OUT_DIR"
 echo "=========================================================="
 
 # Execute
-time $EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER $BACKEND $PREFIX $EPS $SEED $PRECISION
+time $EXEC $SIZE $L $ALPHA $H0 $HA $OMEGA $DT $MAX_POWER "$PREFIX" $EPS $SEED $BACKEND
 
 echo "Time evolution complete for $LABEL."

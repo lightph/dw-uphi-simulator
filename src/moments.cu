@@ -15,6 +15,7 @@
 #include "gpu_backend.cuh"
 #endif
 #include "domain_wall.cuh"
+#include "sim_utils.hpp"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -194,8 +195,6 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
     unsigned long long start_step = static_cast<unsigned long long>(std::round(start_time / dt));
     if (start_step < 1) start_step = 1;
 
-    unsigned long long print_interval = std::max<unsigned long long>(1, total_steps / 100);
-
     std::cout << "Total simulation steps: " << total_steps << "\n"
               << "Recording starts at step: " << start_step << "\n"
               << "Requested moment checkpoints: " << num_checkpoints << "\n"
@@ -204,35 +203,17 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
               << std::endl;
 
     auto generate_checkpoints = [&](int num_cp) {
-        std::vector<unsigned long long> cps;
-        if (total_steps > 0 && num_cp > 0 && total_steps >= start_step) {
-            double log_min = std::log10(static_cast<double>(start_step));
-            double log_max = std::log10(static_cast<double>(total_steps));
-            for (int i = 0; i < num_cp; ++i) {
-                double divisor = (num_cp > 1) ? static_cast<double>(num_cp - 1) : 1.0;
-                double log_val = log_min + i * (log_max - log_min) / divisor;
-                unsigned long long cp =
-                    static_cast<unsigned long long>(std::round(std::pow(10.0, log_val)));
-
-                if (cp < start_step) cp = start_step;
-                if (cp > total_steps) cp = total_steps;
-                cps.push_back(cp);
+        std::vector<unsigned long long> cps = dw::utils::generate_log_checkpoints(total_steps, num_cp, start_step);
+        // Enforce a minimum interval of 50 steps to prevent synchronization stalls
+        std::vector<unsigned long long> filtered_cps;
+        unsigned long long last_cp = 0;
+        for (auto cp : cps) {
+            if (cp - last_cp >= 50) {
+                filtered_cps.push_back(cp);
+                last_cp = cp;
             }
-            std::sort(cps.begin(), cps.end());
-            cps.erase(std::unique(cps.begin(), cps.end()), cps.end());
-
-            // Enforce a minimum interval of 50 steps to prevent synchronization stalls
-            std::vector<unsigned long long> filtered_cps;
-            unsigned long long last_cp = 0;
-            for (auto cp : cps) {
-                if (cp - last_cp >= 50) {
-                    filtered_cps.push_back(cp);
-                    last_cp = cp;
-                }
-            }
-            return filtered_cps;
         }
-        return cps;
+        return filtered_cps;
     };
 
     std::vector<unsigned long long> checkpoints = generate_checkpoints(num_checkpoints);
@@ -267,9 +248,10 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
     VectorReal d_mu4(batch);
     VectorReal d_mu5(batch);
 
-    auto start_time_chrono = std::chrono::high_resolution_clock::now();
     auto next_checkpoint = checkpoints.begin();
     auto next_sq_checkpoint = sq_checkpoints.begin();
+
+    dw::utils::ProgressPrinter progress(total_steps, 100);
 
     for (unsigned long long step = 1; step <= total_steps; ++step) {
         sim.step(current_time);
@@ -438,25 +420,7 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
             ++next_sq_checkpoint;
         }
 
-        if (step % print_interval == 0 || step == total_steps) {
-            auto now = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed = now - start_time_chrono;
-            double steps_per_sec = step / elapsed.count();
-            double eta_sec = (total_steps - step) / steps_per_sec;
-
-            int eta_h = eta_sec / 3600;
-            int eta_m = (static_cast<int>(eta_sec) % 3600) / 60;
-            int eta_s = static_cast<int>(eta_sec) % 60;
-
-            std::cout << "Step " << step << " / " << total_steps << " (" << std::fixed
-                      << std::setprecision(1) << (100.0 * step / total_steps) << "%) "
-                      << "| Elapsed: " << std::setprecision(1) << elapsed.count() << "s "
-                      << "| ETA: " << std::setfill('0') << std::setw(2) << eta_h << ":"
-                      << std::setw(2) << eta_m << ":" << std::setw(2) << eta_s << " ("
-                      << std::setprecision(0) << steps_per_sec << " steps/s)" << std::endl;
-
-            std::cout << std::flush;
-        }
+        progress.print("Simulating", step);
     }
 
     out.close();

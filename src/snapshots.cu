@@ -16,6 +16,7 @@
 #include "gpu_backend.cuh"
 #endif
 #include "domain_wall.cuh"
+#include "sim_utils.hpp"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -36,7 +37,6 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
     if (N_win == 0) N_win = 1;
 
     unsigned long long total_sim_steps = N_trans + N_snap;
-    unsigned long long print_interval = std::max<unsigned long long>(1, total_sim_steps / 20);
 
     std::cout << "Transient steps: " << N_trans << "\n"
               << "Snapshot steps: " << N_snap << "\n"
@@ -57,21 +57,7 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
     Real current_time = 0.0;
     Backend::synchronize();
 
-    std::vector<unsigned long long> checkpoints;
-    if (N_trans > 0) {
-        double log_min = 0.0;
-        double log_max = std::log10(static_cast<double>(N_trans));
-        for (int i = 0; i < 20; ++i) {
-            double log_val = log_min + i * (log_max - log_min) / 19.0;
-            unsigned long long cp =
-                static_cast<unsigned long long>(std::round(std::pow(10.0, log_val)));
-            if (cp == 0) cp = 1;
-            if (cp > N_trans) cp = N_trans;
-            checkpoints.push_back(cp);
-        }
-        std::sort(checkpoints.begin(), checkpoints.end());
-        checkpoints.erase(std::unique(checkpoints.begin(), checkpoints.end()), checkpoints.end());
-    }
+    std::vector<unsigned long long> checkpoints = dw::utils::generate_log_checkpoints(N_trans, 20);
 
     struct Metrics {
         Real var_u, u_dot, phi_dot, entropy;
@@ -79,29 +65,8 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
     std::vector<std::deque<Metrics>> history(batch);
     std::vector<std::deque<unsigned long long>> history_steps(batch);
 
-    auto start_time_chrono = std::chrono::high_resolution_clock::now();
     unsigned long long global_step = 0;
-
-    auto print_progress = [&](const std::string& phase) {
-        if (global_step % print_interval == 0 || global_step == total_sim_steps) {
-            auto now = std::chrono::high_resolution_clock::now();
-            std::chrono::duration<double> elapsed = now - start_time_chrono;
-            double steps_per_sec = global_step / elapsed.count();
-            double eta_sec = (total_sim_steps - global_step) / steps_per_sec;
-
-            int eta_h = eta_sec / 3600;
-            int eta_m = (static_cast<int>(eta_sec) % 3600) / 60;
-            int eta_s = static_cast<int>(eta_sec) % 60;
-
-            std::cout << "[" << phase << "] Step " << global_step << " / " << total_sim_steps
-                      << " (" << std::fixed << std::setprecision(1)
-                      << (100.0 * global_step / total_sim_steps) << "%) "
-                      << "| Elapsed: " << std::setprecision(1) << elapsed.count() << "s "
-                      << "| ETA: " << std::setfill('0') << std::setw(2) << eta_h << ":"
-                      << std::setw(2) << eta_m << ":" << std::setw(2) << eta_s << " ("
-                      << std::setprecision(0) << steps_per_sec << " steps/s)" << std::endl;
-        }
-    };
+    dw::utils::ProgressPrinter progress(total_sim_steps, 20);
 
     // --- TRANSIENT PHASE ---
     std::cout << "Starting transient phase..." << std::endl;
@@ -173,7 +138,7 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
                 }
             }
         }
-        print_progress("Transient");
+        progress.print("Transient", global_step);
     }
     out_transient.close();
 
@@ -210,7 +175,7 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
                 out_snap << "\n";
             }
         }
-        print_progress("Snapshot");
+        progress.print("Snapshot", global_step);
     }
     out_snap.close();
 

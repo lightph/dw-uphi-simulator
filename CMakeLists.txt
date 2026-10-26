@@ -116,4 +116,7 @@ target_link_libraries(sat_check PRIVATE dw_core)
 # If CUDA is disabled, treat .cu files as standard C++ files
 if(NOT USE_CUDA)
     set_source_files_properties(src/main.cu src/moments.cu src/snapshots.cu src/movies.cu src/sweep_main.cu src/saturation_check.cu PROPERTIES LANGUAGE CXX)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        set_source_files_properties(src/main.cu src/moments.cu src/snapshots.cu src/movies.cu src/sweep_main.cu src/saturation_check.cu PROPERTIES COMPILE_FLAGS "-x c++")
+    endif()
 endif()

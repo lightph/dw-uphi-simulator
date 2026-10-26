@@ -56,15 +56,17 @@ endif()
 
 find_package(Threads REQUIRED)
 
+# Always find CPU dependencies (FFTW3 and OpenMP)
+find_package(PkgConfig REQUIRED)
+find_package(OpenMP REQUIRED COMPONENTS CXX)
+pkg_check_modules(FFTW3_SP REQUIRED IMPORTED_TARGET fftw3f)
+pkg_check_modules(FFTW3_DP REQUIRED IMPORTED_TARGET fftw3)
+find_library(FFTW3F_OMP_LIB NAMES fftw3f_omp REQUIRED)
+find_library(FFTW3_OMP_LIB NAMES fftw3_omp REQUIRED)
+
+# Conditionally find GPU dependencies
 if(USE_CUDA)
     find_package(CUDAToolkit REQUIRED)
-else()
-    find_package(PkgConfig REQUIRED)
-    find_package(OpenMP REQUIRED COMPONENTS CXX)
-    pkg_check_modules(FFTW3_SP REQUIRED IMPORTED_TARGET fftw3f)
-    pkg_check_modules(FFTW3_DP REQUIRED IMPORTED_TARGET fftw3)
-    find_library(FFTW3F_OMP_LIB NAMES fftw3f_omp REQUIRED)
-    find_library(FFTW3_OMP_LIB NAMES fftw3_omp REQUIRED)
 endif()
 
 # ==============================================================================
@@ -78,19 +80,20 @@ target_include_directories(dw_core INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/core>
 )
 
-target_link_libraries(dw_core INTERFACE Threads::Threads)
+# Always link CPU dependencies
+target_link_libraries(dw_core INTERFACE 
+    Threads::Threads
+    PkgConfig::FFTW3_SP 
+    PkgConfig::FFTW3_DP
+    ${FFTW3F_OMP_LIB}
+    ${FFTW3_OMP_LIB}
+    OpenMP::OpenMP_CXX
+)
 
+# Conditionally link GPU dependencies
 if(USE_CUDA)
     target_link_libraries(dw_core INTERFACE CUDA::cudart CUDA::cufft)
     target_compile_definitions(dw_core INTERFACE HAS_CUDA)
-else()
-    target_link_libraries(dw_core INTERFACE 
-        PkgConfig::FFTW3_SP 
-        PkgConfig::FFTW3_DP
-        ${FFTW3F_OMP_LIB}
-        ${FFTW3_OMP_LIB}
-        OpenMP::OpenMP_CXX
-    )
 endif()
 
 # ==============================================================================
@@ -114,6 +117,7 @@ target_link_libraries(sweep PRIVATE dw_core)
 add_executable(sat_check src/saturation_check.cu)
 target_link_libraries(sat_check PRIVATE dw_core)
 
+# If CUDA is disabled, treat .cu files as standard C++ files
 if(NOT USE_CUDA)
     set_source_files_properties(src/main.cu src/moments.cu src/snapshots.cu src/movies.cu src/sweep_main.cu src/saturation_check.cu PROPERTIES LANGUAGE CXX)
 endif()

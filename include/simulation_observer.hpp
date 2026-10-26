@@ -1,6 +1,5 @@
 #pragma once
 
-#include <deque>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -8,7 +7,8 @@
 #include <string>
 #include <vector>
 
-#include "domain_wall.hpp"
+#include "cuda_memory.cuh"
+#include "domain_wall.cuh"
 
 namespace dw {
 
@@ -16,48 +16,68 @@ template <typename Backend>
 class SimulationObserver {
    public:
     using Real = typename Backend::PrecisionType::Real;
-    using ComplexVector =
-        typename Backend::template Vector<typename Backend::PrecisionType::Complex>;
 
     SimulationObserver(DomainWall<Backend>& sim, const std::string& output_file)
         : sim_(sim), out_(output_file), current_time_(0.0) {
         out_ << std::setprecision(std::numeric_limits<Real>::max_digits10);
-        out_ << "time avg_u_dot avg_phi_dot var_u phase_variance\n";
+        out_ << "batch_idx time avg_u_dot avg_phi_dot var_u\n";
     }
 
     ~SimulationObserver() {
         if (out_.is_open()) out_.close();
     }
 
-    void run_until_settled(int W, double tolerance) {
+    void run(int total_steps, int output_interval) {
         Backend::synchronize();
 
-        Real previous_mean_var = -1.0;
+        std::size_t batches = sim_.get_batch();
 
-        while (true) {
-            for (int i = 0; i < W; ++i) {
-                sim_.step(current_time_);
-                accumulate_observables();
+        // Allocate device buffers to hold interval history without stalling the CPU
+        CudaVector<Real> d_mean_u(batches * output_interval);
+        CudaVector<Real> d_mean_u2(batches * output_interval);
+        CudaVector<Real> d_mean_sin(batches * output_interval);
+
+        std::vector<Real> h_val_history;
+        h_val_history.reserve(output_interval);
+
+        for (int step = 1; step <= total_steps; ++step) {
+            int local_step = (step - 1) % output_interval;
+
+            if (local_step == 0) {
+                // Pre-zero the arrays asynchronously at the start of every interval
+                Backend::fill_zero(d_mean_u.data(), d_mean_u.size());
+                Backend::fill_zero(d_mean_u2.data(), d_mean_u2.size());
+                Backend::fill_zero(d_mean_sin.data(), d_mean_sin.size());
+                h_val_history.clear();
             }
 
-            Real current_mean_var = sum_var_u_ / sample_count_;
+            // Calculate field at t before step increments it
+            Real h_val = sim_.get_h0() + sim_.get_ha() * std::cos(sim_.get_omega() * current_time_);
+            h_val_history.push_back(h_val);
 
-            if (previous_mean_var >= 0.0) {
-                Real drift = std::abs(current_mean_var - previous_mean_var);
+            // GPU processes the entire batched state asynchronously
+            sim_.step(current_time_);
 
-                if (drift < tolerance) {
-                    std::cout << "System settled at t = " << current_time_
-                              << " with variance drift = " << drift << "\n";
-
-                    // Write the final state before breaking out
-                    write_state(current_mean_var);
-                    break;
-                }
+            // Queue up reduction kernels for each batch
+            for (std::size_t b = 0; b < batches; ++b) {
+                std::size_t step_idx = b * output_interval + local_step;
+                Backend::record_observables_async(sim_.get_state().get_u(b), sim_.get_size(),
+                                                  d_mean_u.data(), d_mean_u2.data(),
+                                                  d_mean_sin.data(), step_idx);
             }
 
-            write_state(current_mean_var);
-            previous_mean_var = current_mean_var;
+            // Sync and evaluate only when the interval is full
+            if (step % output_interval == 0) {
+                Backend::synchronize();
+
+                auto h_mean_u = Backend::download_array(d_mean_u.data(), d_mean_u.size());
+                auto h_mean_u2 = Backend::download_array(d_mean_u2.data(), d_mean_u2.size());
+                auto h_mean_sin = Backend::download_array(d_mean_sin.data(), d_mean_sin.size());
+
+                write_state(h_mean_u, h_mean_u2, h_mean_sin, h_val_history, output_interval);
+            }
         }
+        Backend::synchronize();
     }
 
    private:
@@ -65,41 +85,41 @@ class SimulationObserver {
     std::ofstream out_;
     Real current_time_;
 
-    Real sum_avg_u_dot_ = 0.0;
-    Real sum_avg_phi_dot_ = 0.0;
-    Real sum_var_u_ = 0.0;
-    unsigned long long sample_count_ = 0;
-
-    void accumulate_observables() {
-        auto obs = Backend::compute_observables(sim_.get_state().u);
-
-        Real N_grid = static_cast<Real>(sim_.get_size());
-        Real mean_sin2phi = obs.sin2phi / N_grid;
-        Real mean_u = obs.u / N_grid;
-        Real mean_u2 = obs.u2 / N_grid;
-
+    void write_state(const std::vector<Real>& h_mean_u, const std::vector<Real>& h_mean_u2,
+                     const std::vector<Real>& h_mean_sin, const std::vector<Real>& h_val_history,
+                     int output_interval) {
+        std::size_t batches = sim_.get_batch();
         Real alpha = sim_.get_alpha();
-        Real h_val = sim_.get_h0() + sim_.get_ha() * std::cos(sim_.get_omega() * current_time_);
 
-        Real u_dot = 0.5 * (alpha * alpha * h_val + mean_sin2phi);
-        Real phi_dot = 0.5 * (alpha * h_val - alpha * mean_sin2phi);
-        Real var_u = mean_u2 - (mean_u * mean_u);
+        for (std::size_t b = 0; b < batches; ++b) {
+            Real sum_u_dot = 0.0;
+            Real sum_phi_dot = 0.0;
+            Real sum_var_u = 0.0;
 
-        sum_avg_u_dot_ += u_dot;
-        sum_avg_phi_dot_ += phi_dot;
-        sum_var_u_ += var_u;
-        sample_count_++;
-    }
+            // Compute true interval averages on the CPU using the downloaded GPU history
+            for (int s = 0; s < output_interval; ++s) {
+                std::size_t idx = b * output_interval + s;
 
-    void write_state(Real current_variance) {
-        out_ << current_time_ << " " << (sum_avg_u_dot_ / sample_count_) << " "
-             << (sum_avg_phi_dot_ / sample_count_) << " " << (sum_var_u_ / sample_count_) << " "
-             << current_variance << "\n";
+                Real mean_u = h_mean_u[idx];
+                Real mean_u2 = h_mean_u2[idx];
+                Real mean_sin2phi = h_mean_sin[idx];
+                Real h_val = h_val_history[s];
 
-        sum_avg_u_dot_ = 0.0;
-        sum_avg_phi_dot_ = 0.0;
-        sum_var_u_ = 0.0;
-        sample_count_ = 0;
+                Real var_u = mean_u2 - (mean_u * mean_u);
+                Real u_dot = 0.5 * (alpha * alpha * h_val + mean_sin2phi);
+                Real phi_dot = 0.5 * (alpha * h_val - alpha * mean_sin2phi);
+
+                sum_u_dot += u_dot;
+                sum_phi_dot += phi_dot;
+                sum_var_u += var_u;
+            }
+
+            out_ << b << " " << current_time_ << " "
+                 << (sum_u_dot / static_cast<Real>(output_interval)) << " "
+                 << (sum_phi_dot / static_cast<Real>(output_interval)) << " "
+                 << (sum_var_u / static_cast<Real>(output_interval)) << "\n";
+        }
+        out_.flush();
     }
 };
 

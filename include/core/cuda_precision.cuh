@@ -6,12 +6,6 @@
 
 namespace dw {
 
-struct CudaSinglePrecision : public SinglePrecision {
-    using Complex = thrust::complex<float>;
-    using CufftReal = cufftReal;
-    using CufftComplex = cufftComplex;
-};
-
 struct CudaDoublePrecision : public DoublePrecision {
     using Complex = thrust::complex<double>;
     using CufftReal = cufftDoubleReal;

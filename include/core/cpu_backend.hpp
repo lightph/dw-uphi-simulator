@@ -30,13 +30,11 @@ struct CpuBackend {
 
     using ComplexVector = AlignedVector<Complex>;
 
-    template <typename StreamType = void*>
-    static void synchronize(StreamType stream = nullptr) { return; }
+    static void synchronize(void* stream = nullptr) { return; }
 
-    template <typename StreamType = void*>
     static void evaluate_nonlinear(const Complex* z, Complex* nl_out, std::size_t size,
                                    std::size_t batch, Real alpha, const Real* h0, const Real* ha,
-                                   Real omega, Real t, StreamType stream = nullptr) {
+                                   Real omega, Real t, void* stream = nullptr) {
         std::size_t total_elements = size * batch;
 #pragma omp parallel for
         for (std::size_t j = 0; j < total_elements; ++j) {
@@ -51,10 +49,9 @@ struct CpuBackend {
         }
     }
 
-    template <typename StreamType = void*>
     static void accumulate_sweep_metrics(const Complex* u, const Complex* u_prev, Real* acc_vu,
                                          Real* acc_vphi, Real* acc_rugosity, std::size_t size,
-                                         std::size_t batch, Real dt, StreamType stream = nullptr) {
+                                         std::size_t batch, Real dt, void* stream = nullptr) {
 #pragma omp parallel for
         for (std::size_t b = 0; b < batch; ++b) {
             std::size_t offset = b * size;
@@ -94,10 +91,9 @@ struct CpuBackend {
         }
     }
 
-    template <typename StreamType = void*>
     static void accumulate_strobo_metrics(const Complex* u, const Complex* u_strobo_prev,
                                           Real* acc_step, Real* acc_step2, std::size_t size,
-                                          std::size_t batch, StreamType stream = nullptr) {
+                                          std::size_t batch, void* stream = nullptr) {
         std::size_t total = size * batch;
 #pragma omp parallel for
         for (std::size_t j = 0; j < total; ++j) {
@@ -109,10 +105,9 @@ struct CpuBackend {
         }
     }
 
-    template <typename StreamType = void*>
     static void step_linear(Complex* z_hat, const Complex* nl_hat, const Complex* prop_z,
                             const Complex* prop_nl, std::size_t grid_size,
-                            std::size_t total_elements, StreamType stream = nullptr) {
+                            std::size_t total_elements, void* stream = nullptr) {
         Real norm_factor = Real(1.0) / static_cast<Real>(grid_size);
 #pragma omp parallel for
         for (std::size_t j = 0; j < total_elements; ++j) {
@@ -121,13 +116,11 @@ struct CpuBackend {
         }
     }
 
-    template <typename StreamType = void*>
-    static void copy(const Complex* src, Complex* dst, std::size_t size, StreamType stream = nullptr) {
+    static void copy(const Complex* src, Complex* dst, std::size_t size, void* stream = nullptr) {
         std::copy(src, src + size, dst);
     }
 
-    template <typename StreamType = void*>
-    static Real compute_diff_sq(const Complex* u1, const Complex* u2, std::size_t size, StreamType stream = nullptr) {
+    static Real compute_diff_sq(const Complex* u1, const Complex* u2, std::size_t size, void* stream = nullptr) {
         Real sum = 0.0;
 #pragma omp parallel for reduction(+ : sum)
         for (std::size_t i = 0; i < size; ++i) {
@@ -142,8 +135,7 @@ struct CpuBackend {
         Real sin2phi, u, var_sum;
     };
 
-    template <typename StreamType = void*>
-    static ObsTuple compute_observables(const Complex* z, std::size_t size, StreamType stream = nullptr) {
+    static ObsTuple compute_observables(const Complex* z, std::size_t size, void* stream = nullptr) {
         Real s_sin = 0.0, s_u = 0.0;
 
 #pragma omp parallel for reduction(+ : s_sin, s_u)
@@ -166,8 +158,7 @@ struct CpuBackend {
         return {s_sin, s_u, var_sum};
     }
 
-    template <typename StreamType = void*>
-    static void accumulate_power_spectrum(const Complex* u_hat, Real* ps_accum, std::size_t size, StreamType stream = nullptr) {
+    static void accumulate_power_spectrum(const Complex* u_hat, Real* ps_accum, std::size_t size, void* stream = nullptr) {
 #pragma omp parallel for
         for (std::size_t i = 0; i < size; ++i) {
             std::size_t i_neg = (size - i) % size;
@@ -182,8 +173,7 @@ struct CpuBackend {
         }
     }
 
-    template <typename StreamType = void*>
-    static Real compute_spectral_entropy(const Complex* u_hat, std::size_t size, StreamType stream = nullptr) {
+    static Real compute_spectral_entropy(const Complex* u_hat, std::size_t size, void* stream = nullptr) {
         Real sum_S = 0.0;
 
 #pragma omp parallel for reduction(+ : sum_S)
@@ -226,25 +216,21 @@ struct CpuBackend {
         return entropy / std::log(static_cast<Real>(size - 1));
     }
 
-    template <typename StreamType = void*>
-    static void fill_zero(Real* vec, std::size_t size, StreamType stream = nullptr) {
+    static void fill_zero(Real* vec, std::size_t size, void* stream = nullptr) {
         std::fill(vec, vec + size, Real(0.0));
     }
 
-    template <typename StreamType = void*>
-    static std::vector<Real> download_array(const Real* vec, std::size_t size, StreamType stream = nullptr) {
+    static std::vector<Real> download_array(const Real* vec, std::size_t size, void* stream = nullptr) {
         return std::vector<Real>(vec, vec + size);
     }
 
-    template <typename StreamType = void*>
-    static std::vector<Complex> download_array(const Complex* vec, std::size_t size, StreamType stream = nullptr) {
+    static std::vector<Complex> download_array(const Complex* vec, std::size_t size, void* stream = nullptr) {
         return std::vector<Complex>(vec, vec + size);
     }
 
-    template <typename StreamType = void*>
     static void accumulate_height_histogram(const Complex* z, std::size_t z_size, Real mean_u, Real sigma_u,
                                             unsigned long long* hist, std::size_t hist_size, Real min_val,
-                                            Real max_val, StreamType stream = nullptr) {
+                                            Real max_val, void* stream = nullptr) {
         Real bin_width = (max_val - min_val) / static_cast<Real>(hist_size);
 
 #pragma omp parallel
@@ -267,20 +253,17 @@ struct CpuBackend {
         }
     }
 
-    template <typename StreamType = void*>
-    static void fill_zero_ull(unsigned long long* vec, std::size_t size, StreamType stream = nullptr) {
+    static void fill_zero_ull(unsigned long long* vec, std::size_t size, void* stream = nullptr) {
         std::fill(vec, vec + size, 0ULL);
     }
 
-    template <typename StreamType = void*>
-    static std::vector<unsigned long long> download_array_ull(const unsigned long long* vec, std::size_t size, StreamType stream = nullptr) {
+    static std::vector<unsigned long long> download_array_ull(const unsigned long long* vec, std::size_t size, void* stream = nullptr) {
         return std::vector<unsigned long long>(vec, vec + size);
     }
 
-    template <typename StreamType = void*>
     static void record_observables_async(const Complex* z, std::size_t size, Real* d_mean_u,
                                          Real* d_mean_u2, Real* d_mean_sin2phi,
-                                         std::size_t step_idx, StreamType stream = nullptr) {
+                                         std::size_t step_idx, void* stream = nullptr) {
         Real s_u = 0.0, s_u2 = 0.0, s_sin = 0.0;
 
 #pragma omp parallel for reduction(+ : s_u, s_u2, s_sin)
@@ -309,8 +292,7 @@ struct CpuBackend {
         return res;
     }
 
-    template <typename StreamType = void*>
-    static std::vector<Real> compute_central_moments(const Complex* z, std::size_t size, int n_max, StreamType stream = nullptr) {
+    static std::vector<Real> compute_central_moments(const Complex* z, std::size_t size, int n_max, void* stream = nullptr) {
         ObsTuple obs = compute_observables(z, size, stream);
         Real mean_u = obs.u / static_cast<Real>(size);
 

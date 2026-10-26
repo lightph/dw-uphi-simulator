@@ -182,8 +182,7 @@ class FftwBaseHandler {
         return freqs_;
     }
 
-    template <typename StreamType>
-    void setStream(StreamType) {}
+    void setStream(void*) {}
 };
 
 /// @brief Handler for Real-to-Complex 1D FFT.
@@ -218,8 +217,7 @@ class FftwHandlerR2C : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwComplex*>(dummy_out.data()), flags);
     }
 
-    template <typename StreamType = void*>
-    void do_fft(const AlignedVector<Real>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
+    void do_fft(const AlignedVector<Real>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, void* stream = nullptr) {
         if (in.empty()) return;
         size_t out_size = ((exact_N / 2) + 1) * batch;
         if (out.size() != out_size) out.resize(out_size);
@@ -265,8 +263,7 @@ class FftwHandlerC2R : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwReal*>(dummy_out.data()), flags);
     }
 
-    template <typename StreamType = void*>
-    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Real>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
+    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Real>& out, size_t exact_N, int batch = 1, void* stream = nullptr) {
         if (in.empty()) return;
         size_t expected_N = exact_N * batch;
         if (out.size() != expected_N) out.resize(expected_N);
@@ -317,8 +314,7 @@ class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwComplex*>(dummy.data()), current_sign_, flags);
     }
 
-    template <typename StreamType = void*>
-    void do_fft(AlignedVector<Complex>& inout, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
+    void do_fft(AlignedVector<Complex>& inout, size_t exact_N, int batch = 1, void* stream = nullptr) {
         if (inout.empty()) return;
         prepare_c2c(exact_N, batch, FFTW_FORWARD, false);
         for (int b = 0; b < batch; ++b) {
@@ -327,8 +323,7 @@ class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
         }
     }
 
-    template <typename StreamType = void*>
-    void do_ifft(AlignedVector<Complex>& inout, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
+    void do_ifft(AlignedVector<Complex>& inout, size_t exact_N, int batch = 1, void* stream = nullptr) {
         if (inout.empty()) return;
         prepare_c2c(exact_N, batch, FFTW_BACKWARD, false);
         for (int b = 0; b < batch; ++b) {
@@ -376,8 +371,7 @@ class FftwHandlerC2COut : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwComplex*>(dummy_out.data()), current_sign_, flags);
     }
 
-    template <typename StreamType = void*>
-    void do_fft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
+    void do_fft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, void* stream = nullptr) {
         if (in.empty()) return;
         size_t total_elements = exact_N * batch;
         if (out.size() != total_elements) out.resize(total_elements);
@@ -390,8 +384,7 @@ class FftwHandlerC2COut : public FftwBaseHandler<Precision> {
         }
     }
 
-    template <typename StreamType = void*>
-    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
+    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, void* stream = nullptr) {
         if (in.empty()) return;
         size_t total_elements = exact_N * batch;
         if (out.size() != total_elements) out.resize(total_elements);

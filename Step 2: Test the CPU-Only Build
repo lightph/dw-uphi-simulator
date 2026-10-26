@@ -1,0 +1,6 @@
+cd ..
+mkdir -p build-cpu
+cd build-cpu
+cmake .. -DUSE_CUDA=OFF
+make -j
+./bin/sweep # Verify it runs successfully on the CPU

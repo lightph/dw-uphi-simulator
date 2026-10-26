@@ -9,6 +9,8 @@
 #$ -l gpu=1
 #$ -t 1-3
 
+
+
 # Jump to the directory where the script was submitted from
 cd $SGE_O_WORKDIR
 
@@ -26,7 +28,7 @@ SIZE=131072         # 2^17
 L=131072.0
 ALPHA=0.27
 OMEGA=1.0
-DT=0.25
+DT=0.196349540849362077403915
 MAX_POWER=30        
 
 # --- Shared Hardware and Output Parameters ---

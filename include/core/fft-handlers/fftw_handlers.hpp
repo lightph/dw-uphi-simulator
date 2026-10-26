@@ -106,6 +106,7 @@ class FftwBaseHandler {
     using Plan = typename FftwApi<Real>::Plan;
 
     size_t current_n_ = 0;
+    int current_batch_ = 0;
     bool current_measure_ = false;
     Plan fft_plan_ = nullptr;
     AlignedVector<Real> freqs_;
@@ -130,35 +131,38 @@ class FftwBaseHandler {
     // Enable moving
     FftwBaseHandler(FftwBaseHandler&& other) noexcept
         : current_n_(other.current_n_),
+          current_batch_(other.current_batch_),
           current_measure_(other.current_measure_),
           fft_plan_(other.fft_plan_),
           freqs_(std::move(other.freqs_)) {
         other.fft_plan_ = nullptr;
         other.current_n_ = 0;
+        other.current_batch_ = 0;
     }
 
     FftwBaseHandler& operator=(FftwBaseHandler&& other) noexcept {
         if (this != &other) {
             cleanup();
             current_n_ = other.current_n_;
+            current_batch_ = other.current_batch_;
             current_measure_ = other.current_measure_;
             fft_plan_ = other.fft_plan_;
             freqs_ = std::move(other.freqs_);
             other.fft_plan_ = nullptr;
             other.current_n_ = 0;
+            other.current_batch_ = 0;
         }
         return *this;
     }
 
     /// @brief Prepares the FFT plan for a given size.
-    /// @param N The number of elements.
-    /// @param measure If true, uses FFTW_MEASURE for optimal performance.
-    virtual void prepare(size_t N, bool measure = false) = 0;
+    virtual void prepare(size_t N, int batch = 1, bool measure = false) = 0;
 
     /// @brief Resets the handler and frees resources.
     void cleanup() {
         destroyPlan();
         current_n_ = 0;
+        current_batch_ = 0;
         freqs_.clear();
     }
 
@@ -166,7 +170,6 @@ class FftwBaseHandler {
     size_t getSize() const { return current_n_; }
 
     /// @brief Computes and returns the frequency mapping for the current size.
-    /// @param h Spatial step size.
     const AlignedVector<Real>& getFrequencies(Real h) {
         int freq_n = (current_n_ / 2) + 1;
         if (freqs_.size() != static_cast<size_t>(freq_n)) {
@@ -178,6 +181,9 @@ class FftwBaseHandler {
         }
         return freqs_;
     }
+
+    template <typename StreamType>
+    void setStream(StreamType) {}
 };
 
 /// @brief Handler for Real-to-Complex 1D FFT.
@@ -189,10 +195,11 @@ class FftwHandlerR2C : public FftwBaseHandler<Precision> {
     using FftwComplex = typename Precision::FftwComplex;
 
    public:
-    void prepare(size_t N, bool measure = true) override {
-        if (N == this->current_n_ && measure == this->current_measure_) return;
+    void prepare(size_t N, int batch = 1, bool measure = true) override {
+        if (N == this->current_n_ && batch == this->current_batch_ && measure == this->current_measure_) return;
         this->cleanup();
         this->current_n_ = N;
+        this->current_batch_ = batch;
         this->current_measure_ = measure;
 
         unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
@@ -203,7 +210,6 @@ class FftwHandlerR2C : public FftwBaseHandler<Precision> {
 #endif
         FftwApi<Real>::plan_with_nthreads(threads_to_use);
 
-        // RAII Dummy arrays to prevent memory leaks during plan creation
         AlignedVector<Real> dummy_in(this->current_n_);
         AlignedVector<Complex> dummy_out(this->current_n_ / 2 + 1);
 
@@ -212,23 +218,22 @@ class FftwHandlerR2C : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwComplex*>(dummy_out.data()), flags);
     }
 
-    /// @brief Executes the forward Real-to-Complex transform.
-    void do_fft(const AlignedVector<Real>& in, AlignedVector<Complex>& out, bool measure = false) {
+    template <typename StreamType = void*>
+    void do_fft(const AlignedVector<Real>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
         if (in.empty()) return;
-        size_t N = in.size();
-        size_t out_size = (N / 2) + 1;
-
+        size_t out_size = ((exact_N / 2) + 1) * batch;
         if (out.size() != out_size) out.resize(out_size);
-        prepare(N, measure);
+        prepare(exact_N, batch, false);
 
-        FftwApi<Real>::execute_dft_r2c(this->fft_plan_,
-                                       reinterpret_cast<FftwReal*>(const_cast<Real*>(in.data())),
-                                       reinterpret_cast<FftwComplex*>(out.data()));
+        for (int b = 0; b < batch; ++b) {
+            FftwApi<Real>::execute_dft_r2c(this->fft_plan_,
+                                           reinterpret_cast<FftwReal*>(const_cast<Real*>(in.data() + b * exact_N)),
+                                           reinterpret_cast<FftwComplex*>(out.data() + b * ((exact_N / 2) + 1)));
+        }
     }
 };
 
 /// @brief Handler for Complex-to-Real 1D Inverse FFT.
-/// @note This leaves the output unnormalized. To recover magnitudes, divide by N.
 template <typename Precision>
 class FftwHandlerC2R : public FftwBaseHandler<Precision> {
     using Real = typename Precision::Real;
@@ -237,10 +242,11 @@ class FftwHandlerC2R : public FftwBaseHandler<Precision> {
     using FftwComplex = typename Precision::FftwComplex;
 
    public:
-    void prepare(size_t N, bool measure = true) override {
-        if (N == this->current_n_ && measure == this->current_measure_) return;
+    void prepare(size_t N, int batch = 1, bool measure = true) override {
+        if (N == this->current_n_ && batch == this->current_batch_ && measure == this->current_measure_) return;
         this->cleanup();
         this->current_n_ = N;
+        this->current_batch_ = batch;
         this->current_measure_ = measure;
 
         unsigned flags = measure ? FFTW_MEASURE : FFTW_ESTIMATE;
@@ -259,17 +265,18 @@ class FftwHandlerC2R : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwReal*>(dummy_out.data()), flags);
     }
 
-    /// @brief Executes the backward Complex-to-Real transform.
-    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Real>& out, bool measure = true) {
+    template <typename StreamType = void*>
+    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Real>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
         if (in.empty()) return;
-        size_t expected_N = (in.size() - 1) * 2;
-
+        size_t expected_N = exact_N * batch;
         if (out.size() != expected_N) out.resize(expected_N);
-        prepare(expected_N, measure);
+        prepare(exact_N, batch, false);
 
-        FftwApi<Real>::execute_dft_c2r(
-            this->fft_plan_, reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
-            reinterpret_cast<FftwReal*>(out.data()));
+        for (int b = 0; b < batch; ++b) {
+            FftwApi<Real>::execute_dft_c2r(
+                this->fft_plan_, reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data() + b * ((exact_N / 2) + 1))),
+                reinterpret_cast<FftwReal*>(out.data() + b * exact_N));
+        }
     }
 };
 
@@ -284,14 +291,14 @@ class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
     int current_sign_ = 0;
 
    public:
-    void prepare(size_t N, bool measure = true) override { prepare_c2c(N, FFTW_FORWARD, measure); }
+    void prepare(size_t N, int batch = 1, bool measure = true) override { prepare_c2c(N, batch, FFTW_FORWARD, measure); }
 
-    /// @brief Prepares the plan considering the direction of the transform.
-    void prepare_c2c(size_t N, int sign, bool measure = true) {
-        if (N == this->current_n_ && measure == this->current_measure_ && sign == current_sign_)
+    void prepare_c2c(size_t N, int batch, int sign, bool measure = true) {
+        if (N == this->current_n_ && batch == this->current_batch_ && measure == this->current_measure_ && sign == current_sign_)
             return;
         this->cleanup();
         this->current_n_ = N;
+        this->current_batch_ = batch;
         this->current_measure_ = measure;
         current_sign_ = sign;
 
@@ -310,21 +317,24 @@ class FftwHandlerC2CIn : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwComplex*>(dummy.data()), current_sign_, flags);
     }
 
-    /// @brief Executes the forward in-place Complex-to-Complex transform.
-    void do_fft(AlignedVector<Complex>& inout, bool measure = true) {
+    template <typename StreamType = void*>
+    void do_fft(AlignedVector<Complex>& inout, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
         if (inout.empty()) return;
-        prepare_c2c(inout.size(), FFTW_FORWARD, measure);
-        FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
-                                   reinterpret_cast<FftwComplex*>(inout.data()));
+        prepare_c2c(exact_N, batch, FFTW_FORWARD, false);
+        for (int b = 0; b < batch; ++b) {
+            FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data() + b * exact_N),
+                                       reinterpret_cast<FftwComplex*>(inout.data() + b * exact_N));
+        }
     }
 
-    /// @brief Executes the backward in-place Complex-to-Complex transform.
-    /// @note This leaves the output unnormalized. To recover magnitudes, divide by N.
-    void do_ifft(AlignedVector<Complex>& inout, bool measure = true) {
+    template <typename StreamType = void*>
+    void do_ifft(AlignedVector<Complex>& inout, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
         if (inout.empty()) return;
-        prepare_c2c(inout.size(), FFTW_BACKWARD, measure);
-        FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data()),
-                                   reinterpret_cast<FftwComplex*>(inout.data()));
+        prepare_c2c(exact_N, batch, FFTW_BACKWARD, false);
+        for (int b = 0; b < batch; ++b) {
+            FftwApi<Real>::execute_dft(this->fft_plan_, reinterpret_cast<FftwComplex*>(inout.data() + b * exact_N),
+                                       reinterpret_cast<FftwComplex*>(inout.data() + b * exact_N));
+        }
     }
 };
 
@@ -339,14 +349,14 @@ class FftwHandlerC2COut : public FftwBaseHandler<Precision> {
     int current_sign_ = 0;
 
    public:
-    void prepare(size_t N, bool measure = true) override { prepare_c2c(N, FFTW_FORWARD, measure); }
+    void prepare(size_t N, int batch = 1, bool measure = true) override { prepare_c2c(N, batch, FFTW_FORWARD, measure); }
 
-    /// @brief Prepares the plan considering the direction of the transform.
-    void prepare_c2c(size_t N, int sign, bool measure = true) {
-        if (N == this->current_n_ && measure == this->current_measure_ && sign == current_sign_)
+    void prepare_c2c(size_t N, int batch, int sign, bool measure = true) {
+        if (N == this->current_n_ && batch == this->current_batch_ && measure == this->current_measure_ && sign == current_sign_)
             return;
         this->cleanup();
         this->current_n_ = N;
+        this->current_batch_ = batch;
         this->current_measure_ = measure;
         current_sign_ = sign;
 
@@ -358,7 +368,6 @@ class FftwHandlerC2COut : public FftwBaseHandler<Precision> {
 #endif
         FftwApi<Real>::plan_with_nthreads(threads_to_use);
 
-        // Need separate dummy arrays for out-of-place planning
         AlignedVector<Complex> dummy_in(this->current_n_);
         AlignedVector<Complex> dummy_out(this->current_n_);
 
@@ -367,30 +376,32 @@ class FftwHandlerC2COut : public FftwBaseHandler<Precision> {
             reinterpret_cast<FftwComplex*>(dummy_out.data()), current_sign_, flags);
     }
 
-    /// @brief Executes the forward out-of-place Complex-to-Complex transform.
-    void do_fft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out,
-                bool measure = false) {
+    template <typename StreamType = void*>
+    void do_fft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
         if (in.empty()) return;
-        size_t N = in.size();
-        if (out.size() != N) out.resize(N);
+        size_t total_elements = exact_N * batch;
+        if (out.size() != total_elements) out.resize(total_elements);
 
-        prepare_c2c(N, FFTW_FORWARD, measure);
-        FftwApi<Real>::execute_dft(this->fft_plan_,
-                                   reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
-                                   reinterpret_cast<FftwComplex*>(out.data()));
+        prepare_c2c(exact_N, batch, FFTW_FORWARD, false);
+        for (int b = 0; b < batch; ++b) {
+            FftwApi<Real>::execute_dft(this->fft_plan_,
+                                       reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data() + b * exact_N)),
+                                       reinterpret_cast<FftwComplex*>(out.data() + b * exact_N));
+        }
     }
 
-    /// @brief Executes the backward out-of-place Complex-to-Complex transform.
-    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out,
-                 bool measure = false) {
+    template <typename StreamType = void*>
+    void do_ifft(const AlignedVector<Complex>& in, AlignedVector<Complex>& out, size_t exact_N, int batch = 1, StreamType stream = nullptr) {
         if (in.empty()) return;
-        size_t N = in.size();
-        if (out.size() != N) out.resize(N);
+        size_t total_elements = exact_N * batch;
+        if (out.size() != total_elements) out.resize(total_elements);
 
-        prepare_c2c(N, FFTW_BACKWARD, measure);
-        FftwApi<Real>::execute_dft(this->fft_plan_,
-                                   reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data())),
-                                   reinterpret_cast<FftwComplex*>(out.data()));
+        prepare_c2c(exact_N, batch, FFTW_BACKWARD, false);
+        for (int b = 0; b < batch; ++b) {
+            FftwApi<Real>::execute_dft(this->fft_plan_,
+                                       reinterpret_cast<FftwComplex*>(const_cast<Complex*>(in.data() + b * exact_N)),
+                                       reinterpret_cast<FftwComplex*>(out.data() + b * exact_N));
+        }
     }
 };
 

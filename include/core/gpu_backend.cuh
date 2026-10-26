@@ -464,9 +464,10 @@ struct GpuBackend {
             z_hat, nl_hat, prop_z, prop_nl, grid_size, total_elements);
     }
 
-    static void copy(const Complex* src, Complex* dst, std::size_t size,
+    template <typename T>
+    static void copy(const T* src, T* dst, std::size_t size,
                      cudaStream_t stream = nullptr) {
-        cudaMemcpyAsync(dst, src, size * sizeof(Complex), cudaMemcpyDeviceToDevice, stream);
+        cudaMemcpyAsync(dst, src, size * sizeof(T), cudaMemcpyDeviceToDevice, stream);
     }
 
     static Real compute_diff_sq(const Complex* u1, const Complex* u2, std::size_t size,

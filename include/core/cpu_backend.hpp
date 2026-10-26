@@ -116,7 +116,8 @@ struct CpuBackend {
         }
     }
 
-    static void copy(const Complex* src, Complex* dst, std::size_t size, void* stream = nullptr) {
+    template <typename T>
+    static void copy(const T* src, T* dst, std::size_t size, void* stream = nullptr) {
         std::copy(src, src + size, dst);
     }
 

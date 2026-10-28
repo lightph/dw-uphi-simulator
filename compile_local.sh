@@ -9,10 +9,7 @@ BUILD_DIR="build_local"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"
 
-# Clean previous CMake cache artifacts to avoid conflicts
-rm -rf CMakeCache.txt CMakeFiles/
-
-# Configure and build without CUDA
+# Configure and build without CUDA (Incremental)
 cmake .. -DUSE_CUDA=OFF -DCMAKE_BUILD_TYPE=Release
 
 make -j"$(nproc)"

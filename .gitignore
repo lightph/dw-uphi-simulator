@@ -1,13 +1,22 @@
 #build
 build/
 compile_commands.json
+build_local/
+build_native/
 
 #output and figures
 output/
 figures/
+paper/
+saturation_rugosity.txt
+
+# Python
+__pycache__/
+*.py[cod]
 
 # Doxygen output
 docs/html/
 docs/latex/
 docs/xml/
 .aider*
+

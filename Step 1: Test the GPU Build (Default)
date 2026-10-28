@@ -1,5 +1,0 @@
-mkdir -p build
-cd build
-cmake .. -DUSE_CUDA=ON
-make -j
-./bin/sweep # or whichever executable you want to test

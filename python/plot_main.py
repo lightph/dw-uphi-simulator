@@ -39,10 +39,18 @@ def plot_time_series(data_dir, output_dir, prefix):
         print(f"Skipping time series: {file_path.name} not found.")
         return
 
-    data = np.loadtxt(file_path, skiprows=1)
-    time = data[:, 0]
-    mean_u = data[:, 1]
-    u_dot = data[:, 2]
+    data = np.genfromtxt(file_path, names=True)
+    if data.size == 0:
+        return
+    if data.ndim == 0:
+        data = data.reshape(1)
+
+    if 'batch' in data.dtype.names:
+        data = data[data['batch'] == 0]
+
+    time = data['time'] if 'time' in data.dtype.names else data[data.dtype.names[0]]
+    mean_u = data['mean_u'] if 'mean_u' in data.dtype.names else data[data.dtype.names[1]]
+    u_dot = data['u_dot'] if 'u_dot' in data.dtype.names else data[data.dtype.names[2]]
 
     # Plot mean_u
     fig, ax = plt.subplots()
@@ -91,36 +99,37 @@ def plot_transient_metrics(data_dir, output_dir, prefix):
         print(f"Skipping transient metrics: {file_path.name} not found.")
         return
 
-    data = np.loadtxt(file_path, skiprows=1)
+    data = np.genfromtxt(file_path, names=True)
     if data.size == 0:
         print("Transient metrics file is empty.")
         return
+    if data.ndim == 0:
+        data = data.reshape(1)
 
-    # Handle 1D array if only one row exists
-    if data.ndim == 1:
-        data = data.reshape(1, -1)
+    if 'batch' in data.dtype.names:
+        data = data[data['batch'] == 0]
 
-    time = data[:, 1]
-    avg_var_u = data[:, 2]
-    avg_u_dot = data[:, 3]
-    avg_phi_dot = data[:, 4]
-    avg_entropy = data[:, 5]
+    time = data['time'] if 'time' in data.dtype.names else data[data.dtype.names[1]]
+    avg_var_u = data['avg_var_u'] if 'avg_var_u' in data.dtype.names else data[data.dtype.names[2]]
+    avg_u_dot = data['avg_u_dot'] if 'avg_u_dot' in data.dtype.names else data[data.dtype.names[3]]
+    avg_phi_dot = data['avg_phi_dot'] if 'avg_phi_dot' in data.dtype.names else data[data.dtype.names[4]]
+    avg_entropy = data['avg_entropy'] if 'avg_entropy' in data.dtype.names else data[data.dtype.names[5]]
 
     # Read final summary values to plot as horizontal asymptotes
     summary_path = data_dir / f"{prefix}_final_summary.txt"
     final_vals = None
     if summary_path.exists():
         try:
-            summary_data = np.loadtxt(summary_path, skiprows=1)
-            if summary_data.size > 0:
-                # Ensure it's 1D
-                if summary_data.ndim > 1:
-                    summary_data = summary_data[0]
+            s_data = np.genfromtxt(summary_path, names=True)
+            if s_data.size > 0:
+                if s_data.ndim > 0 and 'batch' in s_data.dtype.names:
+                    s_data = s_data[s_data['batch'] == 0]
+                row = s_data[0] if s_data.ndim > 0 else s_data
                 final_vals = {
-                    'var_u': summary_data[1],
-                    'u_dot': summary_data[2],
-                    'phi_dot': summary_data[3],
-                    'entropy': summary_data[4]
+                    'var_u': row['var_u'] if 'var_u' in row.dtype.names else float(row[1]),
+                    'u_dot': row['u_dot'] if 'u_dot' in row.dtype.names else float(row[2]),
+                    'phi_dot': row['phi_dot'] if 'phi_dot' in row.dtype.names else float(row[3]),
+                    'entropy': row['spectral_entropy'] if 'spectral_entropy' in row.dtype.names else float(row[4])
                 }
         except Exception as e:
             print(f"Could not parse final summary for asymptotes: {e}")
@@ -179,9 +188,17 @@ def plot_power_spectrum(data_dir, output_dir, prefix):
         print(f"Skipping power spectrum: {file_path.name} not found.")
         return
 
-    data = np.loadtxt(file_path, skiprows=1)
-    k = data[:, 0]
-    power = data[:, 1]
+    data = np.genfromtxt(file_path, names=True)
+    if data.size == 0:
+        return
+    if data.ndim == 0:
+        data = data.reshape(1)
+
+    if 'batch' in data.dtype.names:
+        data = data[data['batch'] == 0]
+
+    k = data['k'] if 'k' in data.dtype.names else data[data.dtype.names[0]]
+    power = data['power'] if 'power' in data.dtype.names else data[data.dtype.names[1]]
 
     # Filter out k=0 for log-log plotting
     mask = k > 0
@@ -202,9 +219,17 @@ def plot_height_histogram(data_dir, output_dir, prefix):
         print(f"Skipping histogram: {file_path.name} not found.")
         return
 
-    data = np.loadtxt(file_path, skiprows=1)
-    bin_center = data[:, 0]
-    pdf = data[:, 2]
+    data = np.genfromtxt(file_path, names=True)
+    if data.size == 0:
+        return
+    if data.ndim == 0:
+        data = data.reshape(1)
+
+    if 'batch' in data.dtype.names:
+        data = data[data['batch'] == 0]
+
+    bin_center = data['bin_center'] if 'bin_center' in data.dtype.names else data[data.dtype.names[0]]
+    pdf = data['probability_density'] if 'probability_density' in data.dtype.names else data[data.dtype.names[-1]]
 
     fig, ax = plt.subplots()
     ax.plot(bin_center, pdf, color='tab:blue', linestyle='-', linewidth=1.2)

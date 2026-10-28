@@ -45,63 +45,85 @@ def plot_individual_system(data_dir, output_dir, prefix):
     # Time Series
     ts_file = data_dir / f"{prefix}_time_series.txt"
     if ts_file.exists():
-        data = np.loadtxt(ts_file, skiprows=1)
-        time, mean_u, u_dot = data[:, 0], data[:, 1], data[:, 2]
-        
-        fig, ax = plt.subplots()
-        ax.plot(time, mean_u, color='black', rasterized=True, linewidth=0.5)
-        ax.set_xlabel(r'Time $t$')
-        ax.set_ylabel(r'Mean height $\langle u \rangle$')
-        fig.savefig(output_dir / "time_series_mean_u.pdf")
-        plt.close(fig)
-
-        fig, ax = plt.subplots()
-        ax.plot(time, u_dot, color='tab:red', rasterized=True, linewidth=0.5)
-        ax.set_xlabel(r'Time $t$')
-        ax.set_ylabel(r'Velocity $\langle \dot{u} \rangle$')
-        fig.savefig(output_dir / "time_series_u_dot.pdf")
-        plt.close(fig)
-
-        # 1) Time Fourier Transform of mean_udot
-        if len(time) > 1:
-            dt_ts = time[1] - time[0]
-            N = len(time)
-            
-            # Subtract mean to remove the large DC component at omega=0
-            u_dot_centered = u_dot - np.mean(u_dot)
-            
-            # Compute FFT and angular frequencies
-            fft_u_dot = np.fft.fft(u_dot_centered)
-            freqs = np.fft.fftfreq(N, d=dt_ts)
-            omega = 2 * np.pi * freqs
-            
-            # Filter for positive frequencies
-            pos_mask = freqs > 0
-            omega_pos = omega[pos_mask]
-            power_u_dot = np.abs(fft_u_dot[pos_mask])**2 / N
+        data = np.genfromtxt(ts_file, names=True)
+        if data.size > 0:
+            if data.ndim == 0: data = data.reshape(1)
+            if 'batch' in data.dtype.names:
+                data = data[data['batch'] == 0]
+            time = data['time'] if 'time' in data.dtype.names else data[data.dtype.names[0]]
+            mean_u = data['mean_u'] if 'mean_u' in data.dtype.names else data[data.dtype.names[1]]
+            u_dot = data['u_dot'] if 'u_dot' in data.dtype.names else data[data.dtype.names[2]]
             
             fig, ax = plt.subplots()
-            ax.loglog(omega_pos, power_u_dot, color='tab:purple', linewidth=0.5, rasterized=True)
-            ax.set_xlabel(r'Angular Frequency $\omega$')
-            ax.set_ylabel(r'Power Spectrum of $\langle \dot{u} \rangle$')
-            fig.savefig(output_dir / "time_series_u_dot_ps.pdf")
+            ax.plot(time, mean_u, color='black', rasterized=True, linewidth=0.5)
+            ax.set_xlabel(r'Time $t$')
+            ax.set_ylabel(r'Mean height $\langle u \rangle$')
+            fig.savefig(output_dir / "time_series_mean_u.pdf")
             plt.close(fig)
+
+            fig, ax = plt.subplots()
+            ax.plot(time, u_dot, color='tab:red', rasterized=True, linewidth=0.5)
+            ax.set_xlabel(r'Time $t$')
+            ax.set_ylabel(r'Velocity $\langle \dot{u} \rangle$')
+            fig.savefig(output_dir / "time_series_u_dot.pdf")
+            plt.close(fig)
+
+            # 1) Time Fourier Transform of mean_udot
+            if len(time) > 1:
+                dt_ts = time[1] - time[0]
+                N = len(time)
+                
+                # Subtract mean to remove the large DC component at omega=0
+                u_dot_centered = u_dot - np.mean(u_dot)
+                
+                # Compute FFT and angular frequencies
+                fft_u_dot = np.fft.fft(u_dot_centered)
+                freqs = np.fft.fftfreq(N, d=dt_ts)
+                omega = 2 * np.pi * freqs
+                
+                # Filter for positive frequencies
+                pos_mask = freqs > 0
+                omega_pos = omega[pos_mask]
+                power_u_dot = np.abs(fft_u_dot[pos_mask])**2 / N
+                
+                fig, ax = plt.subplots()
+                ax.loglog(omega_pos, power_u_dot, color='tab:purple', linewidth=0.5, rasterized=True)
+                ax.set_xlabel(r'Angular Frequency $\omega$')
+                ax.set_ylabel(r'Power Spectrum of $\langle \dot{u} \rangle$')
+                fig.savefig(output_dir / "time_series_u_dot_ps.pdf")
+                plt.close(fig)
 
     # Transient Metrics
     trans_file = data_dir / f"{prefix}_transient_metrics.txt"
     sum_file = data_dir / f"{prefix}_final_summary.txt"
     final_vals = None
     if sum_file.exists():
-        s_data = np.loadtxt(sum_file, skiprows=1)
-        if s_data.size > 0:
-            if s_data.ndim > 1: s_data = s_data[0]
-            final_vals = {'var_u': s_data[1], 'u_dot': s_data[2], 'phi_dot': s_data[3], 'entropy': s_data[4]}
+        try:
+            s_data = np.genfromtxt(sum_file, names=True)
+            if s_data.size > 0:
+                if s_data.ndim > 0 and 'batch' in s_data.dtype.names:
+                    s_data = s_data[s_data['batch'] == 0]
+                row = s_data[0] if s_data.ndim > 0 else s_data
+                final_vals = {
+                    'var_u': row['var_u'] if 'var_u' in row.dtype.names else float(row[1]),
+                    'u_dot': row['u_dot'] if 'u_dot' in row.dtype.names else float(row[2]),
+                    'phi_dot': row['phi_dot'] if 'phi_dot' in row.dtype.names else float(row[3]),
+                    'entropy': row['spectral_entropy'] if 'spectral_entropy' in row.dtype.names else float(row[4])
+                }
+        except Exception as e:
+            print(f"Could not parse final summary: {e}")
 
     if trans_file.exists():
-        data = np.loadtxt(trans_file, skiprows=1)
+        data = np.genfromtxt(trans_file, names=True)
         if data.size > 0:
-            if data.ndim == 1: data = data.reshape(1, -1)
-            t, var, u_dot_trans, phi_dot, ent = data[:, 1], data[:, 2], data[:, 3], data[:, 4], data[:, 5]
+            if data.ndim == 0: data = data.reshape(1)
+            if 'batch' in data.dtype.names:
+                data = data[data['batch'] == 0]
+            t = data['time'] if 'time' in data.dtype.names else data[data.dtype.names[1]]
+            var = data['avg_var_u'] if 'avg_var_u' in data.dtype.names else data[data.dtype.names[2]]
+            u_dot_trans = data['avg_u_dot'] if 'avg_u_dot' in data.dtype.names else data[data.dtype.names[3]]
+            phi_dot = data['avg_phi_dot'] if 'avg_phi_dot' in data.dtype.names else data[data.dtype.names[4]]
+            ent = data['avg_entropy'] if 'avg_entropy' in data.dtype.names else data[data.dtype.names[5]]
 
             plots = [
                 ("transient_variance.pdf", var, r'Variance $\sigma_u^2$', 'tab:blue', 'var_u'),
@@ -125,31 +147,42 @@ def plot_individual_system(data_dir, output_dir, prefix):
     # Power Spectrum
     ps_file = data_dir / f"{prefix}_final_ps.txt"
     if ps_file.exists():
-        data = np.loadtxt(ps_file, skiprows=1)
-        mask = data[:, 0] > 0
-        k, power = data[mask, 0], data[mask, 1]
-        fig, ax = plt.subplots()
-        ax.loglog(k, power, color='black', linewidth=1.2)
-        ax.set_xlabel(r'Wavenumber $k$')
-        ax.set_ylabel(r'Structure Factor $S(k)$')
-        fig.savefig(output_dir / "power_spectrum.pdf")
-        plt.close(fig)
+        data = np.genfromtxt(ps_file, names=True)
+        if data.size > 0:
+            if data.ndim == 0: data = data.reshape(1)
+            if 'batch' in data.dtype.names:
+                data = data[data['batch'] == 0]
+            k = data['k'] if 'k' in data.dtype.names else data[data.dtype.names[0]]
+            power = data['power'] if 'power' in data.dtype.names else data[data.dtype.names[1]]
+            mask = k > 0
+            k, power = k[mask], power[mask]
+            fig, ax = plt.subplots()
+            ax.loglog(k, power, color='black', linewidth=1.2)
+            ax.set_xlabel(r'Wavenumber $k$')
+            ax.set_ylabel(r'Structure Factor $S(k)$')
+            fig.savefig(output_dir / "power_spectrum.pdf")
+            plt.close(fig)
 
     # Height Histogram
     hist_file = data_dir / f"{prefix}_final_height_hist.txt"
     if hist_file.exists():
-        data = np.loadtxt(hist_file, skiprows=1)
-        bin_center, pdf = data[:, 0], data[:, 2]
-        fig, ax = plt.subplots()
-        ax.plot(bin_center, pdf, color='tab:blue', linestyle='-', linewidth=1.2)
-        ax.fill_between(bin_center, pdf, color='tab:blue', alpha=0.3)
-        std_normal = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * bin_center**2)
-        ax.plot(bin_center, std_normal, color='black', linestyle='--', linewidth=1.0, label='Gaussian')
-        ax.set_xlabel(r'Normalized Height $(u - \langle u \rangle)/\sigma_u$')
-        ax.set_ylabel(r'Probability Density $P$')
-        ax.legend()
-        fig.savefig(output_dir / "final_height_hist.pdf")
-        plt.close(fig)
+        data = np.genfromtxt(hist_file, names=True)
+        if data.size > 0:
+            if data.ndim == 0: data = data.reshape(1)
+            if 'batch' in data.dtype.names:
+                data = data[data['batch'] == 0]
+            bin_center = data['bin_center'] if 'bin_center' in data.dtype.names else data[data.dtype.names[0]]
+            pdf = data['probability_density'] if 'probability_density' in data.dtype.names else data[data.dtype.names[-1]]
+            fig, ax = plt.subplots()
+            ax.plot(bin_center, pdf, color='tab:blue', linestyle='-', linewidth=1.2)
+            ax.fill_between(bin_center, pdf, color='tab:blue', alpha=0.3)
+            std_normal = (1.0 / np.sqrt(2 * np.pi)) * np.exp(-0.5 * bin_center**2)
+            ax.plot(bin_center, std_normal, color='black', linestyle='--', linewidth=1.0, label='Gaussian')
+            ax.set_xlabel(r'Normalized Height $(u - \langle u \rangle)/\sigma_u$')
+            ax.set_ylabel(r'Probability Density $P$')
+            ax.legend()
+            fig.savefig(output_dir / "final_height_hist.pdf")
+            plt.close(fig)
 
 def plot_scaling_analysis(scaling_data, output_dir):
     L = np.array([d['L'] for d in scaling_data])
@@ -273,27 +306,39 @@ def main():
         
         sum_file = data_dir / f"{prefix}_final_summary.txt"
         if sum_file.exists():
-            s_data = np.loadtxt(sum_file, skiprows=1)
-            if s_data.size > 0:
-                if s_data.ndim > 1: s_data = s_data[0]
-                sys_data['var_u'] = s_data[1]
-                sys_data['u_dot'] = s_data[2]
-                sys_data['phi_dot'] = s_data[3]
-                sys_data['entropy'] = s_data[4]
+            try:
+                s_data = np.genfromtxt(sum_file, names=True)
+                if s_data.size > 0:
+                    if s_data.ndim > 0 and 'batch' in s_data.dtype.names:
+                        s_data = s_data[s_data['batch'] == 0]
+                    row = s_data[0] if s_data.ndim > 0 else s_data
+                    sys_data['var_u'] = row['var_u'] if 'var_u' in row.dtype.names else float(row[1])
+                    sys_data['u_dot'] = row['u_dot'] if 'u_dot' in row.dtype.names else float(row[2])
+                    sys_data['phi_dot'] = row['phi_dot'] if 'phi_dot' in row.dtype.names else float(row[3])
+                    sys_data['entropy'] = row['spectral_entropy'] if 'spectral_entropy' in row.dtype.names else float(row[4])
+            except Exception as e:
+                print(f"Could not parse final summary for scaling: {e}")
 
         ps_file = data_dir / f"{prefix}_final_ps.txt"
         if ps_file.exists():
-            p_data = np.loadtxt(ps_file, skiprows=1)
-            if p_data.size > 0 and p_data.ndim > 1:
-                mask = p_data[:, 0] > 0
-                k = p_data[mask, 0]
-                power = p_data[mask, 1]
-                sys_data['spectra_k'] = k
-                sys_data['spectra_s'] = power
-                if len(k) > 0:
-                    max_idx = np.argmax(power)
-                    sys_data['k_max'] = k[max_idx]
-                    sys_data['s_max'] = power[max_idx]
+            try:
+                p_data = np.genfromtxt(ps_file, names=True)
+                if p_data.size > 0:
+                    if p_data.ndim > 0 and 'batch' in p_data.dtype.names:
+                        p_data = p_data[p_data['batch'] == 0]
+                    k = p_data['k'] if 'k' in p_data.dtype.names else p_data[p_data.dtype.names[0]]
+                    power = p_data['power'] if 'power' in p_data.dtype.names else p_data[p_data.dtype.names[1]]
+                    mask = k > 0
+                    k = k[mask]
+                    power = power[mask]
+                    sys_data['spectra_k'] = k
+                    sys_data['spectra_s'] = power
+                    if len(k) > 0:
+                        max_idx = np.argmax(power)
+                        sys_data['k_max'] = k[max_idx]
+                        sys_data['s_max'] = power[max_idx]
+            except Exception as e:
+                print(f"Could not parse final ps for scaling: {e}")
 
         scaling_data.append(sys_data)
 

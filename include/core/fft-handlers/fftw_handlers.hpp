@@ -21,7 +21,16 @@ struct FftwApi;
 template <>
 struct FftwApi<float> {
     using Plan = fftwf_plan;
-    static void plan_with_nthreads(int nthreads) { fftwf_plan_with_nthreads(nthreads); }
+    static void plan_with_nthreads(int nthreads) {
+#ifdef _OPENMP
+        static bool threads_initialized = false;
+        if (!threads_initialized) {
+            fftwf_init_threads();
+            threads_initialized = true;
+        }
+#endif
+        fftwf_plan_with_nthreads(nthreads);
+    }
     static Plan plan_dft_r2c_1d(int n, float* in, fftwf_complex* out, unsigned flags) {
         return fftwf_plan_dft_r2c_1d(n, in, out, flags);
     }
@@ -47,7 +56,16 @@ struct FftwApi<float> {
 template <>
 struct FftwApi<double> {
     using Plan = fftw_plan;
-    static void plan_with_nthreads(int nthreads) { fftw_plan_with_nthreads(nthreads); }
+    static void plan_with_nthreads(int nthreads) {
+#ifdef _OPENMP
+        static bool threads_initialized = false;
+        if (!threads_initialized) {
+            fftw_init_threads();
+            threads_initialized = true;
+        }
+#endif
+        fftw_plan_with_nthreads(nthreads);
+    }
     static Plan plan_dft_r2c_1d(int n, double* in, fftw_complex* out, unsigned flags) {
         return fftw_plan_dft_r2c_1d(n, in, out, flags);
     }

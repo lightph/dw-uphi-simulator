@@ -7,6 +7,12 @@
 #include <random>
 #include <string>
 
+#ifdef HAS_CUDA
+#include <cuda_runtime.h>
+#else
+using cudaStream_t = void*;
+#endif
+
 #include "state.cuh"
 #include "stepper.cuh"
 
@@ -56,7 +62,7 @@ class DomainWall {
 
         initialize_propagators();
         initialize_state();
-
+#ifdef HAS_CUDA
         int deviceId;
         cudaGetDevice(&deviceId);
         cudaMemLocation loc = {};
@@ -65,6 +71,7 @@ class DomainWall {
         loc.id = (deviceId == cudaCpuDeviceId) ? 0 : deviceId;
         cudaMemPrefetchAsync(h0_.data(), batch_ * sizeof(Real), loc, 0);
         cudaMemPrefetchAsync(ha_.data(), batch_ * sizeof(Real), loc, 0);
+#endif
     }
 
     void step(Real& current_time, cudaStream_t stream = nullptr) {
@@ -138,6 +145,7 @@ class DomainWall {
             Real phi = dist(gen);
             state_.u[i] = Complex(u, phi);
         }
+#ifdef HAS_CUDA
         int deviceId;
         cudaGetDevice(&deviceId);
 
@@ -152,6 +160,7 @@ class DomainWall {
         cudaMemPrefetchAsync(state_.u_hat.data(), total_elements * sizeof(Complex), loc, 0);
         cudaMemPrefetchAsync(state_.nl_eval.data(), total_elements * sizeof(Complex), loc, 0);
         cudaMemPrefetchAsync(state_.nl_hat.data(), total_elements * sizeof(Complex), loc, 0);
+#endif
     }
 
     struct NonlinearEvaluator {

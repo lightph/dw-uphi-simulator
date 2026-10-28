@@ -37,8 +37,8 @@ class SimulationObserver {
         VectorReal d_mean_u2(batches * output_interval);
         VectorReal d_mean_sin(batches * output_interval);
 
-        std::vector<Real> h_val_history;
-        h_val_history.reserve(output_interval);
+        std::vector<Real> t_history;
+        t_history.reserve(output_interval);
 
         for (int step = 1; step <= total_steps; ++step) {
             int local_step = (step - 1) % output_interval;
@@ -48,12 +48,10 @@ class SimulationObserver {
                 Backend::fill_zero(d_mean_u.data(), d_mean_u.size());
                 Backend::fill_zero(d_mean_u2.data(), d_mean_u2.size());
                 Backend::fill_zero(d_mean_sin.data(), d_mean_sin.size());
-                h_val_history.clear();
+                t_history.clear();
             }
 
-            // Calculate field at t before step increments it
-            Real h_val = sim_.get_h0() + sim_.get_ha() * std::cos(sim_.get_omega() * current_time_);
-            h_val_history.push_back(h_val);
+            t_history.push_back(current_time_);
 
             // GPU processes the entire batched state asynchronously
             sim_.step(current_time_);
@@ -74,7 +72,7 @@ class SimulationObserver {
                 auto h_mean_u2 = Backend::download_array(d_mean_u2.data(), d_mean_u2.size());
                 auto h_mean_sin = Backend::download_array(d_mean_sin.data(), d_mean_sin.size());
 
-                write_state(h_mean_u, h_mean_u2, h_mean_sin, h_val_history, output_interval);
+                write_state(h_mean_u, h_mean_u2, h_mean_sin, t_history, output_interval);
             }
         }
         Backend::synchronize();
@@ -86,15 +84,20 @@ class SimulationObserver {
     Real current_time_;
 
     void write_state(const std::vector<Real>& h_mean_u, const std::vector<Real>& h_mean_u2,
-                     const std::vector<Real>& h_mean_sin, const std::vector<Real>& h_val_history,
+                     const std::vector<Real>& h_mean_sin, const std::vector<Real>& t_history,
                      int output_interval) {
         std::size_t batches = sim_.get_batch();
         Real alpha = sim_.get_alpha();
+        Real omega = sim_.get_omega();
+        const auto& h0_batch = sim_.get_h0_batch();
+        const auto& ha_batch = sim_.get_ha_batch();
 
         for (std::size_t b = 0; b < batches; ++b) {
             Real sum_u_dot = 0.0;
             Real sum_phi_dot = 0.0;
             Real sum_var_u = 0.0;
+            Real h0_b = h0_batch[b];
+            Real ha_b = ha_batch[b];
 
             // Compute true interval averages on the CPU using the downloaded GPU history
             for (int s = 0; s < output_interval; ++s) {
@@ -103,7 +106,7 @@ class SimulationObserver {
                 Real mean_u = h_mean_u[idx];
                 Real mean_u2 = h_mean_u2[idx];
                 Real mean_sin2phi = h_mean_sin[idx];
-                Real h_val = h_val_history[s];
+                Real h_val = h0_b + ha_b * std::cos(omega * t_history[s]);
 
                 Real var_u = mean_u2 - (mean_u * mean_u);
                 Real u_dot = 0.5 * (alpha * alpha * h_val + mean_sin2phi);

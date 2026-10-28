@@ -1,6 +1,10 @@
 #pragma once
 
+#ifdef HAS_CUDA
 #include <cuda_runtime.h>
+#else
+using cudaStream_t = void*;
+#endif
 
 #include <cstddef>
 

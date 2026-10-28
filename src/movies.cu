@@ -60,7 +60,20 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
     Real current_time = 0.0;
     Backend::synchronize();
 
-    std::vector<unsigned long long> checkpoints = dw::utils::generate_log_checkpoints(total_sim_steps, 20);
+    std::vector<unsigned long long> checkpoints =
+        dw::utils::generate_log_checkpoints(std::min<unsigned long long>(total_sim_steps, 50000ULL), 30);
+    // Add periodic linear checkpoints every ~50 driving periods
+    unsigned long long lin_interval = static_cast<unsigned long long>(
+        std::round(50.0 * 2.0 * M_PI / (omega * dt)));
+    if (lin_interval == 0) lin_interval = 16000;
+    for (unsigned long long s = lin_interval; s <= total_sim_steps; s += lin_interval) {
+        checkpoints.push_back(s);
+    }
+    if (checkpoints.empty() || checkpoints.back() != total_sim_steps) {
+        checkpoints.push_back(total_sim_steps);
+    }
+    std::sort(checkpoints.begin(), checkpoints.end());
+    checkpoints.erase(std::unique(checkpoints.begin(), checkpoints.end()), checkpoints.end());
 
     struct Metrics {
         Real var_u, u_dot, phi_dot, entropy;
@@ -70,17 +83,18 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
 
     dw::utils::ProgressPrinter progress(total_sim_steps, 20);
 
-    std::cout << "Starting time evolution..." << std::endl;
+    std::size_t cp_idx = 0;
+    std::cout << "Starting time evolution (" << checkpoints.size() << " metric checkpoints)..." << std::endl;
     for (unsigned long long step = 1; step <= total_sim_steps; ++step) {
         sim.step(current_time);
 
         // --- METRICS RECORDING ---
         bool in_window = false;
-        for (auto cp : checkpoints) {
+        if (cp_idx < checkpoints.size()) {
+            unsigned long long cp = checkpoints[cp_idx];
             unsigned long long start = (cp > N_win) ? (cp - N_win + 1) : 1;
             if (step >= start && step <= cp) {
                 in_window = true;
-                break;
             }
         }
 
@@ -103,15 +117,15 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
             }
         }
 
-        auto it = std::find(checkpoints.begin(), checkpoints.end(), step);
-        if (it != checkpoints.end()) {
-            unsigned long long start = (step > N_win) ? (step - N_win + 1) : 1;
+        if (cp_idx < checkpoints.size() && step == checkpoints[cp_idx]) {
+            unsigned long long cp = checkpoints[cp_idx];
+            unsigned long long start = (cp > N_win) ? (cp - N_win + 1) : 1;
 
             for (std::size_t b = 0; b < batch; ++b) {
                 Real s_var = 0, s_udot = 0, s_phidot = 0, s_ent = 0;
                 unsigned long long count = 0;
                 for (size_t i = 0; i < history[b].size(); ++i) {
-                    if (history_steps[b][i] >= start && history_steps[b][i] <= step) {
+                    if (history_steps[b][i] >= start && history_steps[b][i] <= cp) {
                         s_var += history[b][i].var_u;
                         s_udot += history[b][i].u_dot;
                         s_phidot += history[b][i].phi_dot;
@@ -120,16 +134,16 @@ void run_time_evolution(std::size_t size, std::size_t batch, double L, double al
                     }
                 }
                 if (count > 0) {
-                    out_metrics << b << " " << step << " " << current_time << " " << s_var / count
+                    out_metrics << b << " " << cp << " " << current_time << " " << s_var / count
                                 << " " << s_udot / count << " " << s_phidot / count << " "
                                 << s_ent / count << "\n";
                 }
             }
             out_metrics.flush();
 
-            auto next_it = it + 1;
-            unsigned long long next_start = (next_it != checkpoints.end())
-                                                ? ((*next_it > N_win) ? (*next_it - N_win + 1) : 1)
+            cp_idx++;
+            unsigned long long next_start = (cp_idx < checkpoints.size())
+                                                ? ((checkpoints[cp_idx] > N_win) ? (checkpoints[cp_idx] - N_win + 1) : 1)
                                                 : step + 1;
 
             for (std::size_t b = 0; b < batch; ++b) {

@@ -287,7 +287,7 @@ def create_phase_diagram_figure(X, Y, clean_phase_grid, phase_cmap, phase_patche
         ax_dc.axvline(hc, color='white', lw=0.9)
 
         # Region text labels inside strip
-        ax_dc.text(0.5, 0.5, r'$\mathrm{P}$', color='white', fontsize=9, fontweight='bold', ha='center', va='center')
+        ax_dc.text(0.5, 0.5, r'$\mathrm{PF}$', color='white', fontsize=9, fontweight='bold', ha='center', va='center')
         ax_dc.text((1.0 + hc) / 2.0, 0.5, r'$\mathrm{NR}$', color='white', fontsize=9, fontweight='bold', ha='center', va='center')
         ax_dc.text((hc + 10.0) / 2.0, 0.5, r'$\mathrm{NF}$', color='black', fontsize=9, fontweight='bold', ha='center', va='center')
 
@@ -518,7 +518,7 @@ def main():
     # FIGURE 3: SOLID 5-STATE PHASE DIAGRAM (Clean PRB with Fabri's DC strip)
     # =========================================================================
     phase_cmap = ListedColormap(['#1b7837', '#2166ac', '#4393c3', '#f4a582', '#b2182b'])
-    phase_labels = ['P', 'SF', 'SP', 'NF', 'NR']
+    phase_labels = ['PF', 'SF', 'SP', 'NF', 'NR']
     phase_patches = [mpatches.Patch(color=phase_cmap.colors[i], label=phase_labels[i]) for i in range(5)]
 
     fig3 = create_phase_diagram_figure(
@@ -663,17 +663,16 @@ def main():
     # OPTIONAL EXPORT TO PAPER FIGURES DIRECTORY (SEPARATE SIZES, NEVER TOGETHER)
     # =========================================================================
     if args.export_paper:
-        paper_fig_dir = os.path.join("paper", "figuras")
-        if os.path.isdir(paper_fig_dir):
-            import shutil
-            L_val = detect_system_length(args.data_dir)
-            if L_val is not None and L_val > 16:
-                target_pdf = os.path.join(paper_fig_dir, f"phasediagram_L{int(L_val)}.pdf")
-                shutil.copyfile(f3_pdf, target_pdf)
-                if not args.quiet:
-                    print(f"Exported publication phase diagram to {target_pdf}")
-            else:
-                target_pdf = os.path.join(paper_fig_dir, "phasediagram_L8.pdf")
+        paper_fig_dirs = [
+            os.path.join("paper", "figuras"),
+            os.path.join("paper_recs", "figuras")
+        ]
+        import shutil
+        L_val = detect_system_length(args.data_dir)
+        fname = f"phasediagram_L{int(L_val)}.pdf" if (L_val is not None and L_val > 16) else "phasediagram_L8.pdf"
+        for pfd in paper_fig_dirs:
+            if os.path.isdir(pfd):
+                target_pdf = os.path.join(pfd, fname)
                 shutil.copyfile(f3_pdf, target_pdf)
                 if not args.quiet:
                     print(f"Exported publication phase diagram to {target_pdf}")

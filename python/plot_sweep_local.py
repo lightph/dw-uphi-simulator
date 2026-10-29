@@ -112,9 +112,9 @@ METRIC_SPECS = {
         'cmap': ListedColormap(['green', 'blue', 'cyan', 'red', 'darkred']), 
         'log': False, 'cat': True, 'vmin': -0.5, 'vmax': 4.5,
         'ticks': [0, 1, 2, 3, 4], 
-        'labels': ['P', 'SF', 'SP', 'NF', 'NR'],
+        'labels': ['PF', 'SF', 'SP', 'NF', 'NR'],
         'display_name': 'Phase',
-        'desc': '5-state phase classification (Pinned, Locked Flat, Locked Periodic, Unlocked Flat, Unlocked Rough)'
+        'desc': '5-state phase classification (Pinned Flat, Locked Flat, Locked Periodic, Unlocked Flat, Unlocked Rough)'
     },
     'binarized_rugosity': {
         'cmap': ListedColormap(['#4575b4', '#d73027']), 

@@ -197,7 +197,7 @@ def main():
             'cmap': ListedColormap(['green', 'blue', 'cyan', 'red', 'darkred']), 
             'log': False, 'cat': True, 'vmin': -0.5, 'vmax': 4.5,
             'ticks': [0, 1, 2, 3, 4], 
-            'labels': ['P', 'SF', 'SP', 'NF', 'NR'],
+            'labels': ['PF', 'SF', 'SP', 'NF', 'NR'],
             'display_name': 'Phase'
         },
         'binarized_rugosity': {

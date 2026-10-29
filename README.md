@@ -2,11 +2,12 @@
 
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://en.wikipedia.org/wiki/C%2B%2B17)
 [![CUDA](https://img.shields.io/badge/CUDA-11.0%2B-green.svg)](https://developer.nvidia.com/cuda-toolkit)
+[![OpenMP](https://img.shields.io/badge/OpenMP-4.5%2B-red.svg)](https://www.openmp.org/)
 [![CMake](https://img.shields.io/badge/CMake-3.19%2B-orange.svg)](https://cmake.org)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-yellow.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
 
-Official C++ / CUDA implementation, high-performance simulation engine, and publication artifact package for:
+Official C++17 / CUDA high-performance simulation framework, analytical perturbation solvers, Floquet monodromy stability analyzer, and complete publication reproduction suite for:
 
 > **Synchronization and Spatiotemporal Phases in Driven Precessing Domain Walls**  
 > Luz Pérez Herrera, E. F. Pusiol, and A. B. Kolton  
@@ -17,291 +18,334 @@ Official C++ / CUDA implementation, high-performance simulation engine, and publ
 
 ## Table of Contents
 
-- [Overview & Physical Model](#overview--physical-model)
-  - [The Slonczewski ($u-\phi$) Model](#the-slonczewski-u--phi-model)
+- [Overview & Physical Framework](#overview--physical-framework)
+  - [The Slonczewski ($u-\phi$) Equations](#the-slonczewski-u--phi-equations)
   - [Conversion to Physical Units (Co/Pt Multilayers)](#conversion-to-physical-units-copt-multilayers)
-  - [The Five Dynamical Phases](#the-five-dynamical-phases)
-- [Repository Tour](#repository-tour)
-- [Paper Figure Reproduction Guide](#paper-figure-reproduction-guide)
-  - [Figure 2: Shapiro Steps & Average Velocities in Rigid DWs](#figure-2-shapiro-steps--average-velocities-in-rigid-dws)
+  - [The Five Macroscopic Dynamical Regimes](#the-five-macroscopic-dynamical-regimes)
+- [Repository Architecture: The Three Pillars](#repository-architecture-the-three-pillars)
+  - [1. Rigid Wall Dynamics (`rigid_wall/`)](#1-rigid-wall-dynamics-rigid_wall)
+  - [2. Floquet Stability Analysis (`floquet/`)](#2-floquet-stability-analysis-floquet)
+  - [3. Full PDE Simulations (`pde/`)](#3-full-pde-simulations-pde)
+  - [4. Publication Reproduction Suite (`reproduction/`)](#4-publication-reproduction-suite-reproduction)
+- [Master Paper Figure Reproduction Guide](#master-paper-figure-reproduction-guide)
+  - [Summary Map of Publication Figures](#summary-map-of-publication-figures)
+  - [One-Click Recreation of All Figures](#one-click-recreation-of-all-figures)
+  - [Figure 1: Domain Wall Coordinates & Schematic](#figure-1-domain-wall-coordinates--schematic)
+  - [Figure 2: Rigid Wall Synchronization & Shapiro Steps](#figure-2-rigid-wall-synchronization--shapiro-steps)
   - [Figure 3: Floquet Linear Stability Diagrams](#figure-3-floquet-linear-stability-diagrams)
-  - [Figure 4: Flexible Extended DW Dynamics vs $h_0$ ($L/L_0=8$ and $1024$)](#figure-4-flexible-extended-dw-dynamics-vs-h_0-ll_08-and-1024)
-  - [Figure 5: Full Dynamical Phase Diagram in the $(h_0, h_a)$ Plane](#figure-5-full-dynamical-phase-diagram-in-the-h_0-h_a-plane)
-  - [Figure 6: Universal Edwards-Wilkinson Scaling Collapse of the NR Phase](#figure-6-universal-edwards-wilkinson-scaling-collapse-of-the-nr-phase)
+  - [Figure 4: Flexible Extended DW Dynamics vs $h_0$ ($h_a=3$)](#figure-4-flexible-extended-dw-dynamics-vs-h_0-h_a3)
+  - [Figure 5: Full Dynamical Phase Diagram ($L/L_0=256$)](#figure-5-full-dynamical-phase-diagram-ll_0256)
+  - [Figure 6: Universal Edwards-Wilkinson Scaling Collapse (NR Phase)](#figure-6-universal-edwards-wilkinson-scaling-collapse-nr-phase)
   - [Figure 7: Spatiotemporal Cascade of the SP Phase](#figure-7-spatiotemporal-cascade-of-the-sp-phase)
-  - [Figure 8: Finite-Size Scaling of the SP Phase ($w^2$ and $\kappa_{\mathrm{peak}}$ vs $L/L_0$)](#figure-8-finite-size-scaling-of-the-sp-phase-w2-and-kappa_mathrmpeak-vs-ll_0)
-  - [Figure 9 (Appendix): Finite-Size Phase Diagram for $L/L_0=8$](#figure-9-appendix-finite-size-phase-diagram-for-ll_08)
-- [Prerequisites & Dependencies](#prerequisites--dependencies)
-- [Compilation & Build](#compilation--build)
-  - [Quick Automated Build Scripts](#quick-automated-build-scripts)
-  - [Manual CMake Build (GPU + CPU)](#manual-cmake-build-gpu--cpu)
+  - [Figure 8: Finite-Size Scaling of the SP Phase](#figure-8-finite-size-scaling-of-the-sp-phase)
+  - [Figure 9: Small-System Phase Diagram ($L/L_0=8$)](#figure-9-small-system-phase-diagram-ll_08)
+- [Prerequisites & Build System](#prerequisites--build-system)
+  - [System Dependencies](#system-dependencies)
+  - [Automated Quick Builds](#automated-quick-builds)
   - [Manual CMake Build (CPU Only)](#manual-cmake-build-cpu-only)
-  - [Verifying the Build Locally](#verifying-the-build-locally)
-- [Simulation Executables Reference](#simulation-executables-reference)
-  - [1. `main` (Standard Time Evolution & Observables)](#1-main-standard-time-evolution--observables)
-  - [2. `time_evo` (Logarithmic Sampling & Surface Growth)](#2-time_evo-logarithmic-sampling--surface-growth)
-  - [3. `sweep` (1D / 2D Parameter Sweeps & Order Parameters)](#3-sweep-1d--2d-parameter-sweeps--order-parameters)
-  - [4. `moments` (Higher-Order Moments & Cumulants)](#4-moments-higher-order-moments--cumulants)
-  - [5. `snapshots` (Real-Space Profile Snapshots)](#5-snapshots-real-space-profile-snapshots)
-  - [6. `movies` (High-Framerate Binary Animations)](#6-movies-high-framerate-binary-animations)
-  - [7. `sat_check` (Saturation & Convergence Utility)](#7-sat_check-saturation--convergence-utility)
-- [Python Analysis & Plotting Suite](#python-analysis--plotting-suite)
-- [HPC & Cluster Workflow](#hpc--cluster-workflow)
-- [Directory Structure](#directory-structure)
+  - [Manual CMake Build (CUDA GPU Acceleration)](#manual-cmake-build-cuda-gpu-acceleration)
+- [Executables & Module Reference](#executables--module-reference)
+  - [Rigid Wall Binaries](#rigid-wall-binaries)
+  - [Floquet Stability Binaries](#floquet-stability-binaries)
+  - [PDE Simulation Binaries](#pde-simulation-binaries)
+- [Verifying and Compiling the LaTeX Manuscript](#verifying-and-compiling-the-latex-manuscript)
 - [Citation](#citation)
 
 ---
 
-## Overview & Physical Model
+## Overview & Physical Framework
 
-This repository contains a high-performance, batched pseudospectral simulation framework developed to study the non-linear dynamics, phase transitions, and synchronization phenomena of extended magnetic domain walls (DWs) driven by combined DC and AC magnetic fields.
+This repository provides a self-contained, publication-grade computational ecosystem to investigate non-linear dynamics, frequency locking (Shapiro steps), pattern formation, and non-equilibrium roughening transitions in precessing magnetic domain walls (DWs) subjected to combined DC and AC magnetic fields:
 
-### The Slonczewski ($u-\phi$) Model
+$$h(t) = h_0 + h_a \cos(\Omega t)$$
 
-In ferromagnetic thin films with perpendicular magnetic anisotropy (PMA), a quasi-1D domain wall can be described by its local position $u(x,t)$ and internal magnetization angle $\phi(x,t)$. In dimensionless units, the coupled equations of motion are given by:
+### The Slonczewski ($u-\phi$) Equations
+
+In thin ferromagnetic films with perpendicular magnetic anisotropy (PMA), the collective dynamics of an extended 1D domain wall are described by its local interface displacement $u(x,t)$ and internal magnetization angle $\phi(x,t)$. In dimensionless form:
 
 $$\dot{u} = \frac{1}{2} \left[ \alpha^2 h(t) + \sin(2\phi) + \alpha \partial_x^2 u - \partial_x^2 \phi \right]$$
 
 $$\dot{\phi} = \frac{1}{2} \left[ \alpha h(t) - \alpha \sin(2\phi) + \partial_x^2 u + \alpha \partial_x^2 \phi \right]$$
 
-where:
-- $\alpha$ is the dimensionless Gilbert damping parameter.
-- $h(t) = h_0 + h_a \cos(\Omega t)$ is the external perpendicular magnetic field consisting of a DC component $h_0$ and an AC amplitude $h_a$ oscillating at frequency $\Omega$.
-
-Introducing the complex coordinate $z(x,t) = u(x,t) - i\phi(x,t)$, this system maps compactly to:
+where $\alpha$ is the dimensionless Gilbert damping parameter. Introducing the complex coordinate $z(x,t) = u(x,t) - i\phi(x,t)$, the system maps compactly to:
 
 $$\dot{z} = \frac{\alpha - i}{2} \left[ \alpha h(t) + i\sin\left(2\,\mathrm{Im}(z)\right) + \partial_x^2 z \right]$$
 
-The spatial linear term $\mathcal{L}(z) = \frac{\alpha-i}{2}\partial_x^2 z$ is integrated in Fourier space using the unconditionally stable Crank-Nicolson method, while the non-linear term $\mathcal{N}(z) = \frac{\alpha-i}{2}[\alpha h(t) + i\sin(2\,\mathrm{Im}(z))]$ is stepped explicitly. All spatial derivatives and linear propagation are evaluated with spectral accuracy in double precision.
+The spatial linear diffusion and dispersion $\mathcal{L}(z) = \frac{\alpha-i}{2}\partial_x^2 z$ is integrated in Fourier space via the unconditionally stable Crank-Nicolson method, while non-linear gyrotropic terms are integrated explicitly in real space with double-precision spectral accuracy.
 
 ### Conversion to Physical Units (Co/Pt Multilayers)
 
-Model variables are nondimensionalized using intrinsic material scales. For a typical thin Co/Pt multilayer film ($\alpha = 0.27$, $A_{\text{ex}} = 1.4 \times 10^{-11}\text{ J/m}$, $M_s = 9.1 \times 10^5\text{ A/m}$, $K_u = 8.4 \times 10^5\text{ J/m}^3$, $N_n = 0.016$):
+Dimensionless variables map directly to physical observables in experimental thin films (e.g. Co/Pt multilayers with $\alpha = 0.27$, $A_{\text{ex}} = 1.4 \times 10^{-11}\text{ J/m}$, $M_s = 9.1 \times 10^5\text{ A/m}$, $K_u = 8.4 \times 10^5\text{ J/m}^3$, $N_n = 0.016$):
 
-| Scale / Parameter | Dimensionless Symbol | Physical Relation | Co/Pt Value |
+| Scale / Parameter | Dimensionless Symbol | Physical Relation | Co/Pt Physical Value |
 |:---|:---:|:---|:---:|
 | **DW Width** | $u_0$ | $\Delta = \sqrt{A_{\text{ex}} / (K_u - \mu_0 M_s^2 / 2)}$ | $\approx 6.6\text{ nm}$ |
 | **In-Plane Length Scale** | $L_0$ | $\Delta \sqrt{2\tilde{K} / N_n}$ | $\approx 58.0\text{ nm}$ |
-| **Timescale** | $T_0$ | $(1+\alpha^2)/(\gamma M_s N_n)$ | $\approx 0.33\text{ ns}$ ($1/T_0 \approx 3.03\text{ GHz}$) |
+| **Characteristic Timescale** | $T_0$ | $(1+\alpha^2)/(\gamma M_s N_n)$ | $\approx 0.33\text{ ns}$ ($1/T_0 \approx 3.03\text{ GHz}$) |
 | **Walker Breakdown Field** | $H_W$ | $\alpha M_s N_n / 2$ | $\approx 2.48\text{ mT}$ |
 | **Applied Drive Frequency** | $\Omega = 1.0$ | $f = \Omega / (2\pi T_0)$ | $\approx 480\text{ MHz}$ |
 | **System Length ($L/L_0 = 8$)** | $L = 8$ | $8 \times L_0$ | $\approx 464\text{ nm}$ |
-| **System Length ($L/L_0 = 1000$)** | $L = 1000$ | $1000 \times L_0$ | $\approx 58.0\text{ }\mu\text{m}$ (thermodynamic limit) |
+| **System Length ($L/L_0 = 256$)** | $L = 256$ | $256 \times L_0$ | $\approx 14.8\text{ }\mu\text{m}$ |
+| **Thermodynamic Limit ($L/L_0 = 1000$)** | $L = 1000$ | $1000 \times L_0$ | $\approx 58.0\text{ }\mu\text{m}$ |
 
-### The Five Dynamical Phases
+### The Five Macroscopic Dynamical Regimes
 
-By combining spatial order/disorder of the interface position $u$ and temporal synchronization/asynchrony of the precessional angle $\phi$, the paper identifies **five distinct macroscopic dynamical regimes**:
+The coupling between temporal precession locking and spatial flexural stability produces **five distinct macroscopic dynamical phases**:
 
-| Acronym | Phase Name | Spatial Structure ($u$) | Precession Dynamics ($\phi$) | Coherence & Characteristics |
+| Acronym | Phase Name | Interface Roughness ($w^2$) | Precession Dynamics ($\langle\dot\phi\rangle$) | Physical Signature |
 |:---:|:---|:---:|:---:|:---|
-| **PF** | **Pinned Flat** | Flat | Pinned ($\langle\dot\phi\rangle = 0$) | Below effective Walker breakdown $h_W(h_a) \approx \|J_0(\alpha h_a / \Omega)\|$ |
-| **SF** | **Synchronized Flat** | Flat | Frequency-Locked ($\langle\dot\phi\rangle = n\Omega/2$) | Coherent precession; locks to Shapiro steps; suppressed roughness |
-| **SP** | **Synchronized Periodic** | Periodic Corrugation | Frequency-Locked ($\langle\dot\phi\rangle = n\Omega/2$) | Coherent precession; spatial periodicity selected by Floquet mode $\kappa^*$ |
-| **NF** | **Non-synchronized Flat** | Flat | Unlocked ($\langle\dot\phi\rangle \neq n\Omega/2$) | Coherent precession; dynamically stabilized flat interface |
-| **NR** | **Non-synchronized Rough** | Self-Affine Rough | Incoherent / Chaotic | Deterministic spatiotemporal chaos; 1D Edwards-Wilkinson universality |
+| **PF** | **Pinned Flat** | Flat ($w^2 = 0$) | Pinned ($\langle\dot\phi\rangle = 0$) | Below dynamic Walker threshold $h_W(h_a) \approx \|J_0(\alpha h_a / \Omega)\|$ |
+| **SF** | **Synchronized Flat** | Flat ($w^2 = 0$) | Frequency-Locked ($\langle\dot\phi\rangle = n\Omega/2$) | Coherent uniform translation on Shapiro steps |
+| **SP** | **Synchronized Periodic** | Periodic Corrugation ($w^2 > 0$) | Frequency-Locked ($\langle\dot\phi\rangle = n\Omega/2$) | Spatiotemporal pattern formation selected by Floquet mode $\kappa^*$ |
+| **NF** | **Non-synchronized Flat** | Flat ($w^2 = 0$) | Unlocked ($\langle\dot\phi\rangle \neq n\Omega/2$) | Dynamically stabilized precessing flat interface |
+| **NR** | **Non-synchronized Rough** | Self-Affine Rough ($w^2 \sim t^{1/2}$) | Incoherent / Chaotic | Deterministic spatiotemporal chaos; 1D Edwards-Wilkinson universality |
 
 ---
 
-## Repository Tour
+## Repository Architecture: The Three Pillars
 
-The repository is structured to separate simulation kernels, reference datasets, HPC scripts, and visualization:
+The codebase is organized into three clean, modular physical tiers, complemented by an automated reproduction pipeline:
 
-- `include/`: Header-only C++17 / CUDA core simulator.
-  - `core/`: Backend abstractions (`cpu_backend.hpp`, `gpu_backend.cuh`) and FFT handlers (`fftw_handlers.hpp`, `cufft_handlers.cuh`).
-  - `domain_wall.cuh`: Main simulation container managing state vectors, batched execution, and time stepping.
-  - `stepper.cuh`: Pseudospectral Crank-Nicolson integration routines.
-  - `state.cuh`: Real-space and Fourier-space grid buffers.
-  - `simulation_observer.hpp` & `sweep_observer.hpp`: Real-time observable accumulation and disk I/O.
-- `src/`: Executable entry points for both CUDA and CPU backends (`main.cu`, `time_evo.cu`, `sweep_main.cu`, `moments.cu`, `snapshots.cu`, `movies.cu`, `saturation_check.cu`).
-- `output/`: Reference datasets produced on the CAB-CNEA cluster matching all main publication figures:
-  - `output/reference_nc_ew_data/`: High-resolution time-evolution dataset for Figure 6 (Edwards-Wilkinson scaling).
-  - `output/sweep_ha3_L8_L1024_979329/`: Converged 1D sweep data at $h_a=3$ for Figure 4 ($L/L_0=8$ and $1024$).
-  - `output/scaling_data/`: Converged multi-batch system-size scaling dataset for Figure 8 ($L/L_0 = 1$ to $262144$).
-  - `output/sweep_full_973971/`: High-resolution 2D grid sweep dataset for Figure 5 (Phase Diagram).
-  - `output/floquet_transient_omega_1.000_L_1024.bin`: Binary Floquet monodromy stability data.
-- `python/`: Publication-grade plotting scripts designed for Physical Review B (PRB) style.
-- `scripts/`: Production SLURM array submission and local benchmarking shell scripts.
-- `paper/`: Complete LaTeX source (`main.tex`, `refs.bib`) and figures for the manuscript.
+```text
+.
+├── rigid_wall/                  # PILLAR 1: 0D Rigid Wall ODE & Perturbation Theory
+│   ├── include/rigid_wall.hpp   # Header-only C++ ODE stepper, Bessel quadrature, perturbation theory
+│   ├── src/                     # OpenMP CPU & CUDA GPU parameter sweep executables
+│   ├── python/                  # Pure NumPy ODE integrator, Bessel quadrature, Fig. 2 plotter
+│   └── README.md                # Module architecture & mathematical formulation
+├── floquet/                     # PILLAR 2: Linear Stability & Floquet Monodromy Analysis
+│   ├── include/floquet.hpp      # Header-only C++ Floquet monodromy integrator & eigenvalue solver
+│   ├── src/                     # OpenMP CPU & CUDA GPU (h0, ha, kappa) sweep executables
+│   ├── python/                  # Vectorized Python solver, Arnold tongue mapper, Fig. 3 plotter
+│   └── README.md                # Floquet theory documentation & matrix derivation
+├── pde/                         # PILLAR 3: Full 1D Pseudospectral PDE Simulator
+│   ├── include -> ../include    # Core C++17 / CUDA simulation kernels & Crank-Nicolson stepper
+│   ├── src -> ../src            # 7 production binaries (main, time_evo, sweep, snapshots, etc.)
+│   └── README.md                # PDE usage reference, parameter guides & physics manual
+├── reproduction/                # PILLAR 4: Publication Figure Reproduction Suite
+│   ├── plot_figure1_schematic.py
+│   ├── plot_figure2_rigid_wall.py
+│   ├── plot_figure3_floquet.py
+│   ├── plot_figure4_wall_metrics.py
+│   ├── plot_figure5_phase_diagram.py
+│   ├── plot_figure6_nc_ew.py
+│   ├── plot_figure7_sp_cascade.py
+│   ├── plot_figure8_sc_scaling.py
+│   ├── plot_figure9_phase_diagram_L8.py
+│   ├── reproduce_all_figures.py # Master CLI executing all 9 figure pipelines
+│   └── README.md                # Figure-by-figure reproduction reference
+├── output/                      # Pre-computed high-resolution cluster datasets
+├── figures/                     # Generated PDF and PNG figures
+└── paper/                       # Complete LaTeX publication manuscript (RevTeX 4-1)
+    ├── main.tex                 # Manuscript source
+    ├── Makefile                 # Automated verification & compilation
+    └── figuras/                 # Target directory for publication figures
+```
+
+### 1. Rigid Wall Dynamics (`rigid_wall/`)
+- Analyzes the 0D Walker limit without spatial dependence ($\partial_x^2 = 0$).
+- Transformed angle $\psi_1 = 2\phi + \arctan\alpha$ in rescaled time $\tau = \frac{\Omega}{\alpha^2+1}t$:
+  $$\dot{\psi}_1 = \frac{1}{\Omega}[h(\tau) - \sin\psi_1]$$
+- Relates translational velocity $\langle\dot q_1\rangle_\tau$ directly to angular velocity $\langle\dot\psi_1\rangle_\tau$:
+  $$\langle\dot q_1\rangle_\tau = \frac{\alpha^2+1}{2\Omega}h_0 - \frac{1}{2\alpha}\langle\dot\psi_1\rangle_\tau$$
+- Solves Shapiro step boundaries using high-order analytical Bessel expansions $J_n(\alpha h_a / \Omega)$ and numerical Runge-Kutta integration.
+- Includes OpenMP CPU (`rigid_wall_sweep_cpu`) and CUDA GPU (`rigid_wall_sweep_gpu`) engines.
+
+### 2. Floquet Stability Analysis (`floquet/`)
+- Evaluates the linear stability of flexural perturbations $Q_\kappa(\tau)$ and $\Phi_\kappa(\tau)$ around the periodic flat solution:
+  $$\dot{Q}_\kappa = \frac{1}{\Omega}\left[-\alpha\frac{\kappa^2}{2}Q_\kappa + \left(\frac{\kappa^2}{2} + \cos\psi_1(\tau)\right)\Phi_\kappa\right]$$
+  $$\dot{\Phi}_\kappa = \frac{1}{\Omega}\left[-\frac{\kappa^2}{2}Q_\kappa - \alpha\left(\frac{\kappa^2}{2} + \cos\psi_1(\tau)\right)\Phi_\kappa\right]$$
+- Integrates the fundamental $2\times 2$ monodromy matrix over period $T = 2\pi / \Omega$.
+- Mode $\kappa$ is linearly unstable if the largest Floquet multiplier modulus satisfies $|\mu_\kappa| > 1$.
+- Computes Arnold tongue boundaries and maps the maximum unstable mode $\kappa^*$.
+- Implements OpenMP CPU (`floquet_sweep_cpu`) and CUDA GPU (`floquet_sweep_gpu`) grid sweeps.
+
+### 3. Full PDE Simulations (`pde/`)
+- Integrates the complete 1D non-linear Slonczewski system $z(x,t) = u - i\phi$ for arbitrarily large systems ($L/L_0$ up to $262,144$).
+- Unconditionally stable Crank-Nicolson pseudospectral integration on CPU (FFTW3 + OpenMP) and GPU (cuFFT + CUDA).
+- Includes 7 specialized executables:
+  - `main`: Observable time-series, interface roughness, and spatial histograms.
+  - `time_evo`: Logarithmic temporal sampling ($t = 2^p \delta t$) for non-equilibrium scaling.
+  - `sweep`: Automated 1D/2D parameter sweeps over $(h_0, h_a)$ with stroboscopic order parameters.
+  - `moments`: Higher-order statistical central moments ($\mu_2, \mu_3, \mu_4$), skewness, and kurtosis.
+  - `snapshots`: High-precision spatial profile snapshots $u(x,t)$ and $\phi(x,t)$.
+  - `movies`: Streaming binary frame writer for high-framerate video generation.
+  - `sat_check`: Dynamic saturation detector for finite-size crossover times.
+
+### 4. Publication Reproduction Suite (`reproduction/`)
+- Standalone, modular Python scripts dedicated to recreating every figure in the publication from scratch or from pre-computed cluster datasets.
+- Fully compatible with Physical Review B styling (RevTeX column widths, STIX fonts, vector PDF outputs).
+- One-click master CLI: `reproduce_all_figures.py`.
 
 ---
 
-## Paper Figure Reproduction Guide
+## Master Paper Figure Reproduction Guide
 
-All publication figures from the paper can be generated directly using the scripts in `python/` and the pre-computed reference datasets in `output/`, or re-simulated from scratch.
+### Summary Map of Publication Figures
 
-### Figure 2: Shapiro Steps & Average Velocities in Rigid DWs
+| Fig # | Paper Label | Subject / Description | Script in `reproduction/` | Output PDF in `figures/` & `paper/figuras/` |
+|:---:|:---|:---|:---|:---|
+| **1** | `fig:snap` | DW Coordinate System & Real-Space Schematic | `plot_figure1_schematic.py` | `snap_system_345.pdf` |
+| **2** | `fig:ej_walker` | Rigid Wall Shapiro Steps & Velocities | `plot_figure2_rigid_wall.py` | `figure2.pdf` |
+| **3** | `fig:sync_stability` | Floquet Linear Stability Diagrams ($h_a=2, 3$) | `plot_figure3_floquet.py` | `figure3.pdf` |
+| **4** | `fig:wall_metrics` | Flexible DW Dynamics vs $h_0$ ($L/L_0=8, 1024$) | `plot_figure4_wall_metrics.py` | `sweep_ha_3.pdf` |
+| **5** | `fig:fases` | Full Dynamical Phase Diagram ($L/L_0=256$) | `plot_figure5_phase_diagram.py` | `phasediagram_L256.pdf` |
+| **6** | `fig:estructura` | Edwards-Wilkinson Scaling Collapse (NR Phase) | `plot_figure6_nc_ew.py` | `NC_EW_inset.pdf` |
+| **7** | `fig:sc_cascade` | SP Phase Spatiotemporal Profile Cascade | `plot_figure7_sp_cascade.py` | `sc_cascade.pdf` |
+| **8** | `fig:estructuraSCvsL` | SP Phase Finite-Size Scaling vs $L/L_0$ | `plot_figure8_sc_scaling.py` | `SC_scaling.pdf` |
+| **9** | `fig:phasediagram_smallL` | Small-System Phase Diagram ($L/L_0=8$) | `plot_figure9_phase_diagram_L8.py` | `phasediagram_L8.pdf` |
 
-- **Physical Description**: Steady-state average internal angular velocity $\langle \dot{\psi}_1 \rangle_\tau$ and translational velocity $\langle \dot{q}_1 \rangle_\tau$ vs. DC field $h_0$ for $h_a=0$ and $h_a=5$. Compares numerical 4th-order Runge-Kutta integration of the rigid Walker ODE against 1st- and 2nd-order analytical perturbation theory (Bessel function expansions).
+### One-Click Recreation of All Figures
+
+To reproduce all 9 publication figures in sequence and automatically update the LaTeX paper assets:
+
+```bash
+python3 reproduction/reproduce_all_figures.py --all --export-paper
+```
+
+Individual figures can also be reproduced or re-simulated as detailed below.
+
+---
+
+### Figure 1: Domain Wall Coordinates & Schematic
+- **Physical Description**: Schematic illustration of the 1D precessing domain wall configuration showing coordinates $u(x,t)$ and internal magnetization angle $\phi(x,t)$ in thin PMA films.
 - **Reproduction Command**:
   ```bash
-  python3 python/plot_figure4_wall_metrics.py --data-dir output/sweep_ha3_L8_L1024_979329
+  python3 reproduction/plot_figure1_schematic.py --out-dir figures --export-paper
   ```
-  *(The rigid-wall Runge-Kutta solver is embedded into `plot_figure4_wall_metrics.py` and `plot_paper_figure.py`, generating both numerical curves and perturbation boundaries).*
+- **Output**: `figures/snap_system_345.pdf` and `paper/figuras/snap_system_345.pdf`.
+
+---
+
+### Figure 2: Rigid Wall Synchronization & Shapiro Steps
+- **Physical Description**: Steady-state angular velocity $\langle\dot\psi_1\rangle_\tau$ and translational velocity $\langle\dot q_1\rangle_\tau$ vs. DC field $h_0$ for $h_a=0$ and $h_a=5$. Compares numerical 4th-order Runge-Kutta integration of the rigid Walker ODE against 1st- and 2nd-order analytical Bessel perturbation expansions, showing exact Shapiro step plateaus ($n=0, 1, 2$) and velocity reversal dips.
+- **Reproduction Command**:
+  ```bash
+  python3 reproduction/plot_figure2_rigid_wall.py --out-dir figures --export-paper
+  ```
+- **Output**: `figures/figure2.pdf` and `paper/figuras/figure2.pdf`.
+
+---
 
 ### Figure 3: Floquet Linear Stability Diagrams
-
-- **Physical Description**: Linear stability spectrum of flexural spatial modes $\kappa$ around the synchronized flat DW for $h_a=2$ and $h_a=3$ ($\alpha=0.27$, $\Omega=1$). Shows the largest Floquet multiplier modulus $|\mu_\kappa| > 1$ calculated by integrating the monodromy matrix over one period.
+- **Physical Description**: Linear stability spectrum of flexural spatial modes $\kappa \in [0.7, 1.2]$ around the synchronized flat DW for $h_a=2$ and $h_a=3$. Shows the largest Floquet multiplier modulus $|\mu_\kappa| > 1$ calculated by integrating the $2\times 2$ monodromy matrix over period $T = 2\pi/\Omega$, revealing Arnold tongue hybridization and the reentrant stable waist.
 - **Reproduction Command**:
   ```bash
-  python3 python/plot_prb_publication.py \
-    --data-dir output/sweep_full_973971 \
-    --floquet-bin output/floquet_transient_omega_1.000_L_1024.bin
+  python3 reproduction/plot_figure3_floquet.py --out-dir figures --export-paper
+  ```
+- **Output**: `figures/figure3.pdf` and `paper/figuras/figure3.pdf`.
+- **Recomputing the Grid from Scratch**:
+  ```bash
+  python3 reproduction/plot_figure3_floquet.py --recompute --h0-pts 300 --kappa-pts 200
   ```
 
-### Figure 4: Flexible Extended DW Dynamics vs $h_0$ ($L/L_0=8$ and $1024$)
+---
 
-- **Physical Description**: Mean DW velocity $\langle\dot{u}\rangle_{x,t}$, precessional velocity $\langle\dot{\phi}\rangle_{x,t}$, and steady-state roughness $\langle w^2\rangle_t$ across $h_0$ at fixed $h_a=3$, comparing a small system ($L/L_0=8$), an extended thermodynamic system ($L/L_0=1024$), and the zero-dimensional rigid wall.
+### Figure 4: Flexible Extended DW Dynamics vs $h_0$ ($h_a=3$)
+- **Physical Description**: Mean DW translational velocity $\langle\dot{u}\rangle_{x,t}$, precessional velocity $\langle\dot{\phi}\rangle_{x,t}$, and steady-state interface roughness $\langle w^2\rangle_t$ across $h_0 \in [0, 10]$ at fixed $h_a=3$. Directly contrasts a small system ($L/L_0=8$), an extended thermodynamic system ($L/L_0=1024$), and the 0D rigid wall.
 - **Reference Dataset**: `output/sweep_ha3_L8_L1024_979329/`
 - **Reproduction Command**:
   ```bash
-  python3 python/plot_figure4_wall_metrics.py \
-    --data-dir output/sweep_ha3_L8_L1024_979329 \
-    --out-dir figures
+  python3 reproduction/plot_figure4_wall_metrics.py --out-dir figures --export-paper
   ```
-  Outputs `figures/sweep_ha_3.003_caption_only.pdf` and `figures/sweep_ha_3.003_with_legend.pdf`.
-- **Re-running the Simulation**:
-  ```bash
-  ./build/bin/sweep 512 256.0 0.27 1.0 0.019634954 131072 12566.370614 4.0 3.0 3.0 1 "results.txt" gpu
-  ```
-  *(Or execute `scripts/sweep_knl_ha3.sh` for cluster submission).*
+- **Output**: `figures/sweep_ha_3.pdf` and `paper/figuras/sweep_ha_3.pdf`.
 
-### Figure 5: Full Dynamical Phase Diagram in the $(h_0, h_a)$ Plane
+---
 
-- **Physical Description**: The 5-phase macroscopic dynamical phase diagram (PF, SF, SP, NF, NR) over $0 \le h_0 \le 10$ and $0 \le h_a \le 20$ in the thermodynamic limit ($L/L_0 = 1000$), with solid contiguous phase regions, analytical Shapiro step boundaries, and Floquet instability overlays.
-- **Reference Dataset**: `output/sweep_full_973971/` and `output/floquet_transient_omega_1.000_L_1024.bin`
+### Figure 5: Full Dynamical Phase Diagram ($L/L_0=256$)
+- **Physical Description**: The complete 5-phase macroscopic dynamical phase diagram (PF, SF, SP, NF, NR) over $0 \le h_0 \le 10$ and $0 \le h_a \le 20$ in the thermodynamic limit ($L/L_0 = 256$), with solid contiguous regions, analytical Shapiro boundaries, Floquet instability contours, and the bottom DC baseline strip ($h_c \approx 7.075$).
+- **Reference Dataset**: `output/sweep_full_973970/` and `output/floquet_transient_omega_1.000_L_256.bin`
 - **Reproduction Command**:
   ```bash
-  python3 python/plot_prb_publication.py \
-    --data-dir output/sweep_full_973971 \
-    --floquet-bin output/floquet_transient_omega_1.000_L_1024.bin \
-    -o figures/ \
-    --export-paper
+  python3 reproduction/plot_figure5_phase_diagram.py --out-dir figures --export-paper
   ```
-  Generates `figures/prb_phase_diagram.pdf`, `figures/prb_rugosity.pdf`, and `figures/prb_strobo_variance.pdf`.
-- **Interactive Inspection with `plot_sweep_local.py`**:
-  ```bash
-  # View phase diagram and rugosity directly
-  python3 python/plot_sweep_local.py output/sweep_full_973971 -m phase_diagram rugosity
+- **Output**: `figures/phasediagram_L256.pdf`, `figures/prb_rugosity.pdf`, `figures/prb_strobo_variance.pdf`.
 
-  # Extract 1D slice at ha = 3.0
-  python3 python/plot_sweep_local.py output/sweep_full_973971 --slice-ha 3.0
-  ```
+---
 
-### Figure 6: Universal Edwards-Wilkinson Scaling Collapse of the NR Phase
-
-- **Physical Description**: Non-equilibrium roughening dynamics in the chaotic NR regime ($h_0=5, h_a=3, \alpha=0.27, \Omega=1, L/L_0=1000$). Proves that the spatiotemporally chaotic DW belongs to the 1D Edwards-Wilkinson universality class:
-  - Structure factor power-law decay $S_\kappa \propto \kappa^{-2}$.
-  - Interface roughness growth $w^2 \propto t^{1/2}$.
-  - Master scaling curve collapse: $S_\kappa t^{-1}$ vs. $\kappa t^{1/2}$ ($\zeta = 1/2$, $z = 2$).
+### Figure 6: Universal Edwards-Wilkinson Scaling Collapse (NR Phase)
+- **Physical Description**: Non-equilibrium surface roughening dynamics in the chaotic NR regime ($h_0=5, h_a=3, \alpha=0.27, \Omega=1, L/L_0=1000, t=2^{28}\delta t$). Demonstrates that the spatiotemporally chaotic DW belongs to the 1D Edwards-Wilkinson universality class:
+  - Structure factor power-law decay: $S_\kappa \propto \kappa^{-2}$.
+  - Interface roughness growth: $w^2 \propto t^{1/2}$.
+  - Universal master curve collapse: $S_\kappa t^{-1}$ vs. $\kappa t^{1/2}$ ($\zeta = 1/2$, $z = 2$).
 - **Reference Dataset**: `output/reference_nc_ew_data/`
 - **Reproduction Command**:
   ```bash
-  python3 python/plot_figure6_nc_ew.py output/reference_nc_ew_data --layout inset
+  python3 reproduction/plot_figure6_nc_ew.py --out-dir figures --export-paper
   ```
-  Additional layouts available via `--layout`: `side_by_side`, `stacked`, `compensated`, `wide_row`, or `all`.
-- **Re-running the Simulation**:
-  ```bash
-  # High-throughput cluster run via SLURM:
-  sbatch scripts/slurm_generate_nc_data.sh
+- **Output**: `figures/NC_EW_inset.pdf` and `paper/figuras/NC_EW_inset.pdf`.
 
-  # Or standalone via time_evo:
-  ./build/bin/time_evo 65536 8192.0 0.27 5.0 3.0 1.0 0.049087385 28 "output/time_data" 0.05 42 gpu
-  ```
+---
 
 ### Figure 7: Spatiotemporal Cascade of the SP Phase
-
-- **Physical Description**: Real-space profile snapshots of a domain wall section in the steady-state SP phase ($h_0=4, h_a=3, \alpha=0.27, \Omega=1$) over two driving periods ($4\pi/\Omega$), showing stable breathing and peak/valley inversion.
-- **Simulation Command**:
+- **Physical Description**: Real-space profile configurations $u(x,t) - \langle u \rangle_x$ along a section of the domain wall ($x \in [0, 128]$) sampled evenly across an entire AC driving period, colored continuously by local magnetization angle $\phi(x,t) \pmod{2\pi}$, with drive phase $\cos(\Omega t)$ shown on the right.
+- **Reproduction Command**:
   ```bash
-  ./build/bin/snapshots 1024 1 512.0 0.27 4.0 3.0 1.0 0.019634954 10000.0 12.566 2.0 1 "output/sp_snap" 0.05 42 gpu
+  python3 reproduction/plot_figure7_sp_cascade.py --out-dir figures --export-paper
   ```
+- **Output**: `figures/sc_cascade.pdf` and `paper/figuras/sc_cascade.pdf`.
 
-### Figure 8: Finite-Size Scaling of the SP Phase ($w^2$ and $\kappa_{\mathrm{peak}}$ vs $L/L_0$)
+---
 
-- **Physical Description**: Finite-size scaling analysis demonstrating that in the SP phase, steady-state interface roughness $\langle w^2 \rangle_t$ and the dominant wavenumber $\kappa_{\mathrm{peak}}$ converge to system-size independent constants for large $L/L_0$. In the thermodynamic limit, $\kappa_{\mathrm{peak}}$ saturates at the maximum Floquet growth mode $\kappa^* \approx 0.833$. For small systems ($L/L_0 \le 64$), lack of discrete modes in the instability band keeps the wall flat.
+### Figure 8: Finite-Size Scaling of the SP Phase
+- **Physical Description**: Finite-size scaling analysis demonstrating that in the SP phase, steady-state interface roughness $\langle w^2 \rangle_t$ and peak wavenumber $\kappa_{\mathrm{peak}}$ converge to constants in the thermodynamic limit. Confirms that small systems ($L/L_0 \le 64$) remain dynamically flat due to discrete mode quantization, while large systems converge to the maximum Floquet growth mode $\kappa^* \approx 0.833$.
 - **Reference Dataset**: `output/scaling_data/`
 - **Reproduction Command**:
   ```bash
-  python3 python/plot_figure8_sc_scaling.py --data-dir output/scaling_data
+  python3 reproduction/plot_figure8_sc_scaling.py --out-dir figures --export-paper
   ```
-  Generates `paper/figuras/SC_scaling.pdf` and `figures/SC_scaling.pdf`.
-- **Re-running the Simulation**:
-  ```bash
-  # Execute array job across system sizes L = 2^0 to 2^18:
-  sbatch scripts/scaling_analysis.sh
-  ```
+- **Output**: `figures/SC_scaling.pdf` and `paper/figuras/SC_scaling.pdf`.
 
-### Figure 9 (Appendix): Finite-Size Phase Diagram for $L/L_0=8$
+---
 
-- **Physical Description**: 5-phase diagram for a small system ($L/L_0 = 8$) illustrating how discrete spatial mode quantization suppresses the chaotic NR phase and shifts the critical field $h_c$ from $\approx 7$ down to $\approx 3.8$.
+### Figure 9: Small-System Phase Diagram ($L/L_0=8$)
+- **Physical Description**: Complete dynamical phase diagram for small systems ($L/L_0 = 8$) illustrating how discrete spatial mode quantization suppresses the chaotic NR phase and shifts the critical field $h_c$ from $\approx 7.08$ down to $\approx 3.825$.
+- **Reference Dataset**: `output/sweep_full_973971/` and `output/floquet_transient_omega_1.000_L_8.bin`
 - **Reproduction Command**:
   ```bash
-  python3 python/plot_prb_publication.py \
-    --data-dir output/sweep_ha3_L8_L1024_979329/L_8 \
-    -o figures/
+  python3 reproduction/plot_figure9_phase_diagram_L8.py --out-dir figures --export-paper
   ```
+- **Output**: `figures/phasediagram_L8.pdf` and `paper/figuras/phasediagram_L8.pdf`.
 
 ---
 
-## Prerequisites & Dependencies
+## Prerequisites & Build System
 
-### C++ Compiler & Libraries
-- **CMake** $\ge 3.19$
-- **C++17** compliant compiler (GCC $\ge 8.2$, Clang $\ge 11$, or MSVC)
-- **CUDA Toolkit** $\ge 11.0$ (12.x fully supported) - *Required for GPU acceleration*
-- **FFTW3** with OpenMP support (`libfftw3`, `libfftw3_omp`) - *Always required*
-- **OpenMP** runtime library - *Always required*
-- **ccache** (Optional, speeds up recompilation)
-- **Doxygen** (Optional, for generating code documentation)
+### System Dependencies
 
-### Ubuntu / Debian Package Installation
-```bash
-sudo apt-get update
-sudo apt-get install -y cmake build-essential libfftw3-dev libfftw3-omp-dev libomp-dev ccache
-```
+- **C++ Compiler**: GCC $\ge 9.0$ or Clang $\ge 11.0$ (C++17 standard support).
+- **Build Tools**: CMake $\ge 3.19$, Make or Ninja.
+- **CPU Libraries**: FFTW3 with OpenMP support (`libfftw3`, `libfftw3_omp`), OpenMP (`libgomp`).
+- **Python**: Python $\ge 3.8$, NumPy, Matplotlib.
+- **Optional GPU Acceleration**: NVIDIA CUDA Toolkit $\ge 11.0$ (11.x, 12.x fully supported) and cuFFT.
 
-### Fedora / RHEL / Rocky Linux Package Installation
-```bash
-sudo dnf install -y cmake gcc-c++ fftw-devel fftw-libs-openmp libgomp ccache
-```
-
-### Python Environment
-- Python 3.8+
-- Required packages:
+#### Package Installation Commands
+- **Ubuntu / Debian**:
   ```bash
-  pip install numpy matplotlib pandas
+  sudo apt update && sudo apt install -y cmake build-essential libfftw3-dev libfftw3-omp-dev libomp-dev
+  ```
+- **Fedora / RHEL / Rocky Linux**:
+  ```bash
+  sudo dnf install -y cmake gcc-c++ fftw-devel fftw-libs-openmp libgomp
+  ```
+- **Python Environment**:
+  ```bash
+  pip install numpy matplotlib
   ```
 
----
+### Automated Quick Builds
 
-## Compilation & Build
-
-### Quick Automated Build Scripts
-
-Two ready-to-run helper scripts are provided:
+Helper scripts configure compiler flags, ccache directories, and build targets automatically:
 
 ```bash
-# 1. Build locally on CPU (treats .cu as C++17 with OpenMP + FFTW3):
+# Compile CPU targets locally (OpenMP + FFTW3):
 ./compile_local.sh
 
-# 2. Build for GPU cluster (NVCC + cuFFT + FFTW3):
+# Compile GPU targets on CUDA-enabled systems (NVCC + cuFFT):
 ./compile_cluster.sh
 ```
 
-### Manual CMake Build (GPU + CPU)
-
-Compiles both backends with maximum optimization (`-O3`, `--use_fast_math`, interprocedural optimization):
-
-```bash
-mkdir -p build && cd build
-cmake .. -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=Release
-make -j$(nproc)
-```
-Executables are placed in `build/bin/`.
-
 ### Manual CMake Build (CPU Only)
-
-For systems without an NVIDIA GPU:
 
 ```bash
 mkdir -p build_local && cd build_local
@@ -310,225 +354,115 @@ make -j$(nproc)
 ```
 Executables are placed in `build_local/bin/`.
 
-### Verifying the Build Locally
-
-You can verify that all 6 executables compile and run properly using the automated CPU test suite:
+### Manual CMake Build (CUDA GPU Acceleration)
 
 ```bash
-./scripts/test_local_cpu.sh
+mkdir -p build && cd build
+cmake .. -DUSE_CUDA=ON -DCMAKE_BUILD_TYPE=Release
+make -j$(nproc)
 ```
-This executes short test instances of `main`, `moments`, `snapshots`, `movies`, `sweep`, and `sat_check`.
+Executables are placed in `build/bin/`.
 
 ---
 
-## Simulation Executables Reference
+## Executables & Module Reference
 
-All binaries are located in `build/bin/` (or `build_local/bin/`). Every executable accepts an optional `[backend]` parameter as its final argument: `gpu` (default) or `cpu`.
+### Rigid Wall Binaries
 
-### 1. `main` (Standard Time Evolution & Observables)
+Located in `build_local/bin/` (or `build/bin/`):
 
-Simulates time evolution and writes transient metrics, time series, and spatial height histograms. Supports batched execution.
+- **CPU OpenMP Solver**:
+  ```bash
+  ./build_local/bin/rigid_wall_sweep_cpu [options]
+  ```
+  Options:
+  - `--h0-min <float>`, `--h0-max <float>`, `--num-h0 <int>`: DC field range and grid points.
+  - `--ha-min <float>`, `--ha-max <float>`, `--num-ha <int>`: AC amplitude range and grid points.
+  - `-o <filename>`: Output file path.
+- **CUDA GPU Solver**:
+  ```bash
+  ./build/bin/rigid_wall_sweep_gpu [h0_min] [h0_max] [num_h0] [ha_min] [ha_max] [num_ha] [out_file]
+  ```
+  Performs thousands of concurrent ODE sweeps in parallel across GPU threads.
 
-```bash
-./bin/main <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> \
-           <transient_time> <averaging_time> <window_time> <subsample_rate> \
-           <output_prefix> [eps=0.05] [seed=42] [backend=gpu]
-```
+### Floquet Stability Binaries
 
-| Argument | Description | Default / Example |
-|:---|:---|:---:|
-| `size` | Number of spatial grid points ($N = 2^k$) | `1024` |
-| `batch` | Number of concurrent independent systems | `1` |
-| `L` | Physical domain length ($L/L_0$) | `512.0` |
-| `alpha` | Gilbert damping constant $\alpha$ | `0.27` |
-| `h0` | DC magnetic field $h_0$ | `4.0` |
-| `ha` | AC magnetic field amplitude $h_a$ | `3.0` |
-| `omega` | AC angular frequency $\Omega$ | `1.0` |
-| `dt` | Time step $\delta t$ | `0.019634954` |
-| `transient_time` | Initial transient duration before data collection | `10000.0` |
-| `averaging_time` | Evaluation duration for time-averaged metrics | `10000.0` |
-| `window_time` | Moving average window | `100.0` |
-| `subsample_rate` | Stride for saving time series entries | `16` |
-| `output_prefix` | Base filename prefix for output text files | `"output/run1"` |
-| `eps` | Initial spatial perturbation amplitude | `0.05` |
-| `seed` | RNG seed for perturbation | `42` |
-| `backend` | Compute backend (`gpu` or `cpu`) | `gpu` |
+- **CPU OpenMP Solver**:
+  ```bash
+  # 2D Parameter Sweep over (h0, ha):
+  ./build_local/bin/floquet_sweep_cpu --num-h0 100 --num-ha 100 -o floquet_sweep.bin
 
-**Generated Outputs**:
-- `<prefix>_transient_metrics.txt`: Rolling variance $\langle w^2 \rangle_t$, velocities $\dot{u}$, $\dot{\phi}$, and spectral entropy.
-- `<prefix>_time_series.txt`: Subsampled instantaneous mean position $\langle u \rangle$ and velocity.
-- `<prefix>_power_spectrum.txt`: Time-averaged power spectrum $S_\kappa$ across Fourier modes.
-- `<prefix>_height_distribution.txt`: Probability density function of interface fluctuations.
+  # 1D Slice over (h0, kappa) at fixed ha (Figure 3 Mode):
+  ./build_local/bin/floquet_sweep_cpu --ha 2.0 --num-h0 300 --num-k 200 -o floquet_slice.txt
+  ```
+- **CUDA GPU Solver**:
+  ```bash
+  ./build/bin/floquet_sweep_gpu [num_h0] [num_ha] [num_k] [out_file]
+  ```
 
-### 2. `time_evo` (Logarithmic Sampling & Surface Growth)
+### PDE Simulation Binaries
 
-Samples system properties at powers-of-two steps ($t = 2^p \times \delta t$), ideal for tracking surface growth scaling exponents across multiple decades of time.
+All PDE executables support an optional final argument `backend`: `cpu` or `gpu`.
 
 ```bash
-./bin/time_evo <size> <L> <alpha> <h0> <ha> <omega> <dt> <max_power> \
-               <output_prefix> [eps=0.05] [seed=42] [backend=gpu]
-```
+# 1. Standard Time Evolution & Observables
+./build_local/bin/main <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> \
+                       <transient_time> <averaging_time> <window_time> <subsample_rate> \
+                       <output_prefix> [eps=0.05] [seed=42] [backend=cpu]
 
-- `max_power`: Maximum power of two ($2^{\text{max\_power}}$ total steps). Example: `28` yields $\approx 2.68 \times 10^8$ steps.
-- Outputs rolling roughness `<prefix>_transient_w2.txt` and power spectra `<prefix>_ps_step_<step>.txt` at each power of two.
+# 2. Logarithmic Surface Growth Scaling (for Figure 6)
+./build_local/bin/time_evo <size> <L> <alpha> <h0> <ha> <omega> <dt> <max_power> \
+                           <output_prefix> [eps=0.05] [seed=42] [backend=cpu]
 
-### 3. `sweep` (1D / 2D Parameter Sweeps & Order Parameters)
+# 3. 1D / 2D Parameter Sweeps & Order Parameters (for Figures 4, 5, 9)
+./build_local/bin/sweep <size> <L> <alpha> <omega> <dt> <transient_time> <eval_time> \
+                        <h0_val> <ha_min> <ha_max> <ha_steps> <output_file> [backend=cpu]
 
-Performs sweeps over $h_a$ at a given $h_0$, computing steady-state velocities $\langle\dot{u}\rangle$, $\langle\dot{\phi}\rangle$, roughness $\langle w^2 \rangle_t$, and stroboscopic variance $\langle \sigma^2 \rangle_x$:
+# 4. Central Moments & Cumulant Evolution
+./build_local/bin/moments <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> <total_time> \
+                          <start_time> <num_checkpoints> <num_sq_checkpoints> <output_prefix> \
+                          [eps=0.05] [seed=42] [backend=cpu]
 
-```bash
-./bin/sweep <size> <L> <alpha> <omega> <dt> <transient_time> <eval_time> \
-            <h0_val> <ha_min> <ha_max> <ha_steps> <output_file> [backend=gpu]
-```
+# 5. Real-Space Profile Snapshots (for Figure 7)
+./build_local/bin/snapshots <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> \
+                            <transient_time> <snapshot_time> <window_time> <snapshot_rate> \
+                            <output_prefix> [eps=0.05] [seed=42] [backend=cpu]
 
-### 4. `moments` (Higher-Order Moments & Cumulants)
+# 6. High-Framerate Binary Video Streaming
+./build_local/bin/movies <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> <t_max> \
+                         <window_time> <movie_start> <movie_end> <movie_rate> \
+                         <output_prefix> [eps=0.05] [seed=42] [backend=cpu]
 
-Computes statistical central moments ($\mu_2, \mu_3, \mu_4$), skewness, and kurtosis of the domain wall:
-
-```bash
-./bin/moments <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> <total_time> \
-              <start_time> <num_checkpoints> <num_sq_checkpoints> <output_prefix> \
-              [eps=0.05] [seed=42] [backend=gpu]
-```
-
-### 5. `snapshots` (Real-Space Profile Snapshots)
-
-Outputs real-space configurations $u(x,t)$ and $\phi(x,t)$ at specified intervals:
-
-```bash
-./bin/snapshots <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> \
-                <transient_time> <snapshot_time> <window_time> <snapshot_rate> \
-                <output_prefix> [eps=0.05] [seed=42] [backend=gpu]
-```
-
-### 6. `movies` (High-Framerate Binary Animations)
-
-Streams raw binary states to disk for creating smooth video animations of domain wall motion:
-
-```bash
-./bin/movies <size> <batch> <L> <alpha> <h0> <ha> <omega> <dt> <t_max> \
-             <window_time> <movie_start> <movie_end> <movie_rate> \
-             <output_prefix> [eps=0.05] [seed=42] [backend=gpu]
-```
-
-### 7. `sat_check` (Saturation & Convergence Utility)
-
-Tests interface growth until roughness saturates, useful for verifying finite-size crossover times:
-
-```bash
-./bin/sat_check <size> <L> <alpha> <dt> [backend=gpu]
+# 7. Roughness Saturation & Convergence Detector
+./build_local/bin/sat_check <size> <L> <alpha> <dt> [backend=cpu]
 ```
 
 ---
 
-## Python Analysis & Plotting Suite
+## Verifying and Compiling the LaTeX Manuscript
 
-All scripts in `python/` format figures to match the Physical Review B two-column standard (single-column width: 3.375 in, double-column: 7.0 in, STIX/Times fonts):
+The `paper/` directory contains the complete RevTeX 4-1 manuscript source. An automated verification target checks that all 9 publication figures exist before building:
 
-- `plot_figure6_nc_ew.py`: Generates Figure 6 (universal Edwards-Wilkinson scaling collapse, $S_\kappa \propto \kappa^{-2}$, $w^2 \propto t^{1/2}$, and $S_\kappa t^{-1}$ vs. $\kappa t^{1/2}$).
-  ```bash
-  python3 python/plot_figure6_nc_ew.py output/reference_nc_ew_data --layout inset
-  ```
-- `plot_figure4_wall_metrics.py`: Generates Figure 4 (flexible extended domain wall velocities and roughness vs. $h_0$ at $h_a=3$).
-  ```bash
-  python3 python/plot_figure4_wall_metrics.py --data-dir output/sweep_ha3_L8_L1024_979329
-  ```
-- `plot_figure8_sc_scaling.py`: Generates Figure 8 (finite-size scaling analysis of the SP phase, showing convergence of roughness $\langle w^2 \rangle_t$ and peak wavenumber $\kappa_{\mathrm{peak}} \to \kappa^*$).
-  ```bash
-  python3 python/plot_figure8_sc_scaling.py --data-dir output/scaling_data
-  ```
-- `plot_prb_publication.py`: Official publication plotter for 2D sweeps. Generates 5-phase diagrams, log-scale rugosity heatmaps, and stroboscopic variance with vector boundary overlays.
-  ```bash
-  python3 python/plot_prb_publication.py --data-dir output/sweep_full_973971 --floquet-bin output/floquet_transient_omega_1.000_L_1024.bin
-  ```
-- `plot_sweep_local.py`: CLI-friendly tool for slicing, filtering, zooming, and previewing 1D and 2D parameter sweeps with automatic caching:
-  ```bash
-  python3 python/plot_sweep_local.py output/sweep_full_973971 -m phase_diagram --slice-ha 3.0
-  ```
-- `plot_time_evo.py`: Generates time series, power spectra, height distributions, and animated `.mp4` videos from `time_evo` or `main` data.
-  ```bash
-  python3 python/plot_time_evo.py output/time_data --outdir figures
-  ```
-- `plot_scaling.py`: Analyzes Family-Vicsek scaling and dynamic exponents across multiple system lengths.
+```bash
+cd paper
 
----
+# 1. Verify that all 9 figures are present in paper/figuras/:
+make check-figs
 
-## HPC & Cluster Workflow
+# 2. Compile the paper and bibliography:
+make
 
-For large-scale simulations on high-performance computing clusters (SLURM / SGE):
-
-- `scripts/sweep.sh`: SLURM job array script for full $(h_0, h_a)$ 2D parameter sweeps across GPU nodes.
-- `scripts/scaling_analysis.sh`: SLURM job array script simulating system sizes $L = 2^0$ to $2^{18}$ (used for Figure 8).
-- `scripts/slurm_generate_nc_data.sh`: 48-hour GPU job generating the high-precision Edwards-Wilkinson dataset (Figure 6).
-- `scripts/slurm_plot_figure6.sh`: Batch script to plot Figure 6 on compute nodes.
-- `sync_cluster.sh`: Rsync-based utility to sync code and results between local development environments and the cluster:
-  ```bash
-  ./sync_cluster.sh push   # Sync code to remote cluster
-  ./sync_cluster.sh pull   # Pull simulation outputs from remote cluster
-  ```
-
----
-
-## Directory Structure
-
-```text
-.
-├── CMakeLists.txt                # Unified CMake build configuration (CUDA + C++17)
-├── compile_local.sh              # Quick compilation for CPU backend
-├── compile_cluster.sh            # Quick compilation for GPU cluster backend
-├── sync_cluster.sh               # Rsync synchronization with remote cluster
-├── include/                      # C++17 / CUDA Header-only core simulator
-│   ├── core/                     # Backend abstraction layer
-│   │   ├── cpu_backend.hpp       # OpenMP + FFTW3 backend
-│   │   ├── gpu_backend.cuh       # CUDA + cuFFT backend
-│   │   ├── fft-handlers/         # Wrappers for cuFFT and FFTW
-│   │   ├── cuda_precision.cuh    # Precision traits for CUDA (double)
-│   │   └── fftw_precision.hpp    # Precision traits for FFTW (double)
-│   ├── domain_wall.cuh           # Main simulation class with batched execution
-│   ├── simulation_observer.hpp   # Real-time data accumulation and I/O
-│   ├── sweep_observer.hpp        # Stroboscopic variance and order parameter I/O
-│   ├── state.cuh                 # Physical state buffers (real & Fourier space)
-│   ├── stepper.cuh               # Pseudospectral Crank-Nicolson stepper
-│   └── sim_utils.hpp             # Helper math, RNG, and reduction kernels
-├── src/                          # C++ / CUDA Executable entry points
-│   ├── main.cu                   # Standard time evolution & observable analysis
-│   ├── time_evo.cu               # Logarithmic time-stepping for scaling analysis
-│   ├── sweep_main.cu             # 1D/2D parameter sweep engine
-│   ├── moments.cu                # Central moments & cumulant calculations
-│   ├── snapshots.cu              # Real-space profile snapshots
-│   ├── movies.cu                 # High-framerate binary movie output
-│   └── saturation_check.cu       # Roughness saturation & convergence utility
-├── output/                       # Pre-computed reference datasets for publication figures
-│   ├── reference_nc_ew_data/     # Figure 6: EW scaling data (L/L0 = 1000, 2^28 steps)
-│   ├── sweep_ha3_L8_L1024_979329/ # Figure 4: ha=3 sweeps for L/L0=8 and 1024
-│   ├── scaling_data/             # Figure 8: SP phase scaling data (L/L0 = 1 to 262144)
-│   ├── sweep_full_973971/        # Figure 5: Full 2D (h0, ha) sweep data
-│   └── floquet_transient_*.bin   # Binary Floquet stability monodromy data
-├── python/                       # PRB publication-grade plotting suite
-│   ├── plot_figure4_wall_metrics.py  # Figure 4 plotter (Flexible DW dynamics)
-│   ├── plot_figure6_nc_ew.py         # Figure 6 plotter (Universal EW scaling collapse)
-│   ├── plot_figure8_sc_scaling.py    # Figure 8 plotter (SP phase finite-size scaling)
-│   ├── plot_prb_publication.py       # Figure 5 plotter (5-phase diagram & Floquet overlay)
-│   ├── plot_sweep_local.py           # CLI sweep inspector with 1D slicing & caching
-│   ├── plot_time_evo.py              # Time series, spectra, histograms & MP4 video exporter
-│   └── plot_scaling.py               # Family-Vicsek scaling collapse analysis
-├── scripts/                      # SLURM and local execution shell scripts
-│   ├── test_local_cpu.sh         # Fast automated sanity check of all CPU binaries
-│   ├── slurm_generate_nc_data.sh # SLURM job for Figure 6 simulation
-│   ├── scaling_analysis.sh       # SLURM array job for Figure 8 scaling
-│   ├── sweep.sh                  # SLURM array job for full 2D phase diagram sweep
-│   └── sweep_local.sh            # Local 1D parameter sweep execution
-└── paper/                        # Publication manuscript LaTeX source and figures
-    ├── main.tex                  # RevTeX 4-1 manuscript
-    ├── refs.bib                  # BibTeX bibliography
-    └── figuras/                  # Manuscript figure assets (PDF / PNG)
+# 3. Clean temporary LaTeX auxiliary files:
+make clean
 ```
+
+The resulting publication-ready document will be saved at `paper/main.pdf`.
 
 ---
 
 ## Citation
 
-If you use this simulation code or find our results useful in your research, please cite our paper:
+If you use this simulation framework, numerical methods, or reference datasets in your research, please cite our paper:
 
 ```bibtex
 @article{perezherrera2026synchronization,
@@ -539,12 +473,11 @@ If you use this simulation code or find our results useful in your research, ple
   note    = {Under review}
 }
 
-@misc{github_luz,
+@misc{github_dw_uphi_simulator,
   author       = {Luz P{\'e}rez Herrera},
-  title        = {{DW-uphi-simulator: High-performance pseudospectral simulator for 1D domain wall dynamics}},
+  title        = {{DW-uphi-simulator: High-performance pseudospectral framework for 1D domain wall dynamics}},
   year         = {2026},
   publisher    = {GitHub},
-  journal      = {GitHub repository},
   howpublished = {\url{https://github.com/lightph/dw-uphi-simulator}}
 }
 ```

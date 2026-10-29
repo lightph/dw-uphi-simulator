@@ -9,7 +9,7 @@
 %\usepackage{hyperref}% add hypertext capabilities
 %\usepackage[mathlines]{lineno}% Enable numbering of text and display math
 %\linenumbers\relax % Commence numbering lines
-\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
+\usepackage[colorlinks=true, linkcolor=black, citecolor=black, urlcolor=black]{hyperref} % links black: blue = review corrections
 %\usepackage[showframe,%Uncomment any one of the following lines to test 
 %%scale=0.7, marginratio={1:1, 2:3}, ignoreall,% default settings
 %%text={7in,10in},centering,
@@ -23,11 +23,14 @@
 \usepackage[normalem]{ulem}
 
 \newcommand{\change}[1]{{#1}}
-\newcommand{\aleadd}[1]{{\color{blue}#1}}
-\newcommand{\alecom}[1]{{\color{red}#1}}
-\newcommand{\fabricom}[1]{{\color{green!60!blue}#1}}
-\newcommand{\fabriq}[1]{{\color{red!60!blue}#1}}
-\newcommand{\luzcom}[1]{{\color{green!50!black}#1}}
+\newcommand{\aleadd}[1]{{#1}}
+\newcommand{\alecom}[1]{{#1}}
+\newcommand{\fabricom}[1]{{#1}}
+\newcommand{\fabriq}[1]{{#1}}
+\newcommand{\luzcom}[1]{{#1}}
+
+% Claude review: corrections/additions are marked in blue with \new{...}
+\newcommand{\new}[1]{{\color{blue}#1}}
 
 %\newcommand{\eqref}[1]{(\ref{#1})}
 
@@ -66,11 +69,11 @@
 \begin{abstract}
 The dynamics of extended magnetic domain walls driven by constant and alternating magnetic fields are studied using a collective coordinate $u$--$\phi$ model. While purely constant-field driven systems exhibit deterministic spatiotemporal chaos and roughening, the alternating component can lock the precessional frequency via Shapiro-like steps. Using linear stability analysis and Floquet theory, the phase boundaries of stable, synchronized flat wall states are mapped. By studying the nonlinear dynamics of the extended system, a rich phase diagram is identified, 
 composed of five dynamical regimes characterized by the combination of domain wall spatial order (flat, rough or periodic) and  domain wall precession temporal order (pinned, synchronized or unsynchronized).
-Notably, the macroscopic temporal order of the synchronized phases can lead to a flat domain wall or to a periodic structure dominated by a narrow band of linearly unstable modes, both with coherent precession of the domain wall magnetization, while unsynchronized phases can be flat or rough structures with spatiotemporal chaos and incoherent precession.
+Notably, the macroscopic temporal order of the synchronized phases can lead to a flat domain wall or to a periodic structure dominated by a narrow band of linearly unstable modes, both with coherent precession of the domain wall magnetization, while unsynchronized phases can be flat, \new{with coherent precession,} or rough \new{with} spatiotemporal chaos and incoherent precession.
 % The experimental feasibility of observing these synchronization-induced roughening transitions is discussed for standard Co/Pt multilayers, providing a deterministic mechanism to stabilize and control complex domain wall dynamics.
 \end{abstract}
 
-\pacs{Valid PACS appear here}
+%\pacs{Valid PACS appear here}
 \maketitle
 
 
@@ -86,7 +89,7 @@ In a more realistic model for an extended DW, it has been recently shown~\cite{p
 
 This naturally raises the question of whether synchrony can occur in extended DWs. In that case, the macroscopic order induced by the synchrony should manifest itself in the spatial structure of the DW. Similar effects have been found in simulations~\cite{koltonmodelocking,koltonmodelocking2} and experimentally~\cite{okumasuppresion} in other physical systems susceptible to synchrony. An alternating magnetic field or electrical current via spin transfer torque could thus serve to control the otherwise complex DW dynamics, a capability highly relevant for DW-based technologies \cite{Parkin2008,kim2019,Moon_2017,Munsu2021}.
 
-In this work, we study the dynamics of extended DWs with perpendicular magnetic anisotropy using the collective-coordinate $u-\phi$ model \cite{Slonczewski1972, Schryer1974}. We analyze the effects of an AC driving field on the spatiotemporal dynamics of the DW over a wide range of system sizes. In particular, we demonstrate that an appropriate AC field can suppress the spatiotemporal chaos of the DC-driven wall. We identify the parameter regions in which the DW synchronizes with the external drive and determine how synchronization affects its long-range spatial structure. This reveals a phase diagram with five distinct dynamical regimes, characterized by the combination of the DW spatial structure (flat, rough or periodic) and the temporal dynamics of the DW precession (pinned, synchronized or unsynchronized). In the thermodynamic limit, these regimes are separated by nonequilibrium dynamical phase transitions.
+In this work, we study the dynamics of extended DWs with perpendicular magnetic anisotropy using the collective-coordinate $u-\phi$ model \cite{Slonczewski1972, Schryer1974}. We analyze the effects of an AC driving field on the spatiotemporal dynamics of the DW over a wide range of system sizes. In particular, we demonstrate that an appropriate AC field can suppress the spatiotemporal chaos of the DC-driven wall. We identify the parameter regions in which the DW synchronizes with the external drive and determine how synchronization affects its long-range spatial structure. This reveals a phase diagram with five distinct dynamical regimes, characterized by the combination of the DW spatial structure (flat, rough or periodic) and the temporal dynamics of the DW precession (pinned, synchronized or unsynchronized). In the thermodynamic limit, these regimes are separated by \new{sharp boundaries, which we expect to correspond to} nonequilibrium dynamical phase transitions.
 
 \section{Models and Methods}
 Our fundamental description of the DW dynamics is based on the Landau-Lifshitz-Gilbert (LLG) equation:
@@ -170,7 +173,7 @@ For the case $h_\text{a}=0$, Eq.~\eqref{eq:walker_tau2} reduces to the Adler equ
 In addition, the average velocity of $q_{1}$ is given by
 %
 \begin{equation}
-    \langle \dot{q_{1}} \rangle_{\tau} = \frac{\alpha^{2}+1}{2\Omega}h_{0} - \frac{\alpha}{2}\langle\dot \psi_1\rangle_{\tau}.
+    \langle \dot{q_{1}} \rangle_{\tau} = \frac{\alpha^{2}+1}{2\Omega}h_{0} - \new{\frac{1}{2\alpha}}\langle\dot \psi_1\rangle_{\tau}.
     \label{eq:dot_q1_avg}
 \end{equation}
 %
@@ -180,7 +183,7 @@ Note that this expression is also true for the \aleadd{center of mass of the} fl
     \langle\dot q_1 \rangle_\tau  =
     \begin{cases} 
      \dfrac{\alpha^{2}+1}{2\Omega}h_{0} & \text{if} \left| h_0\right| \leq 1 \ , \\ \\
-    \dfrac{\alpha^{2}+1}{2\Omega}h_{0}-\dfrac{\alpha^{2}}{2\Omega}\operatorname{sgn}(h_0) \sqrt{h_0^2 - 1} & \text{if }\left| h_0\right| >1 \ .
+    \dfrac{\alpha^{2}+1}{2\Omega}h_{0}-\new{\dfrac{1}{2\Omega}}\operatorname{sgn}(h_0) \sqrt{h_0^2 - 1} & \text{if }\left| h_0\right| >1 \ .
     \end{cases}\
     \label{eq:avg_q1_cases}
 \end{equation}
@@ -188,26 +191,28 @@ Note that this expression is also true for the \aleadd{center of mass of the} fl
 
 When $h_\text{a}\neq0$, solutions must be found numerically (see Appendix~\ref{ap:num_met}). To determine if a stable periodic solution exists, we recorded the $\psi_1$ variable modulo $2\pi$ at every period of the drive: the system has converged to a stable periodic solution if and only if these values converge to a single equilibrium value $\psi_\text{eq}$, independent of the initial condition.
 
-Synchrony is expected to occur near the values of $h_0$ for which Eq.~\eqref{eq:avg_walker} yields an integer. Figure~\ref{fig:ej_walker} shows example curves of the steady-state average velocities of both $q_{1}$ and $\psi_{1}$ as a function of the DC field $h_0$, with the white regions marking the synchronization steps where $\langle \dot{\psi_{1}} \rangle_{\tau} = n$, and $n =0,1,2$. A Walker-breakdown-like feature repeats in $\langle \dot q_1 \rangle_\tau$ at each frequency-unlocking transition of the internal degree of freedom $\psi_1$. Within each synchronization step, the translational average velocity is
+\new{Since $\psi=2\phi$, locking of $\psi$ to $\langle\dot\psi_1\rangle_\tau=n$ corresponds to a precession of the physical angle $\phi$ at $\langle\dot\phi\rangle=n\Omega/2$.} Synchrony is expected to occur near the values of $h_0$ for which Eq.~\eqref{eq:avg_walker} yields an integer. Figure~\ref{fig:ej_walker} shows example curves of the steady-state average velocities of both $q_{1}$ and $\psi_{1}$ as a function of the DC field $h_0$, with the white regions marking the synchronization steps where $\langle \dot{\psi_{1}} \rangle_{\tau} = n$, and $n =0,1,2$. A Walker-breakdown-like feature repeats in $\langle \dot q_1 \rangle_\tau$ at each frequency-unlocking transition of the internal degree of freedom $\psi_1$. Within each synchronization step, the translational average velocity is
 %
 \begin{equation}
-    \langle\dot q_1 \rangle_\tau  = \dfrac{\alpha^{2}+1}{2\Omega}h_{0}-\dfrac{\alpha}{2}n, \quad h^{n}_{1}\leq h_{0} \leq h^{n}_{2},
+    \langle\dot q_1 \rangle_\tau  = \dfrac{\alpha^{2}+1}{2\Omega}h_{0}-\new{\dfrac{n}{2\alpha}}, \quad h^{n}_{1}\leq h_{0} \leq h^{n}_{2},
 \end{equation}
 %
 with $h^{n}_{1}<h^{n}_{2}$ delimiting the extension of the $n$-th step. Consequently, the DW mobility within a synchronized state is identical to that of the constant-driving-field case below the Walker field ($|h_0|<1$).
 
 These synchronization regions 
-\aleadd{
-in $\langle \dot \psi_1 \rangle_\tau$} are known as \textit{Shapiro steps}, %mathematically 
+in $\langle \dot \psi_1 \rangle_\tau$ are known as \textit{Shapiro steps}, %mathematically 
 %equivalent 
-\aleadd{as they are analogous} 
-to those \aleadd{predicted and observed} in the I--V curves of driven \aleadd{overdamped} Josephson junctions~\cite{shapiro1963josephson}.
+as they are analogous 
+to those predicted and observed in the I--V curves of driven overdamped Josephson junctions~\cite{shapiro1963josephson}.
 %
 \begin{figure}[htbp]
     \centering
-    \includegraphics[width=\linewidth]{figuras/figure2.pdf}
+    \begin{overpic}[width=\linewidth]{figuras/figure2.pdf}
+        \put(89, 52.5){\textbf{(a)}}
+        \put(89, 13.5){\textbf{(b)}}
+    \end{overpic}
     \caption{
-    Steady-state average velocities of the internal ($\psi_1$, top) and translational ($q_1$, bottom) degrees of freedom as a function of the DC field $h_0$, for $h_a=0$ (dashed black) and $h_a=5$ (solid blue). White regions indicate the synchronization steps, where $\langle\dot\psi_1\rangle_\tau$ locks to integer multiples of the driving frequency (dotted horizontal lines, top panel). Vertical red dotted lines indicate synchrony boundaries as given by Eq.~\eqref{eq:width_steps}; their second-order approximation, given by Eq.~\eqref{eq:h0_2order}, is shown as green dashed lines. Walker-breakdown-like spikes in $\langle\dot q_1\rangle_\tau$ recur at each unlocking transition of $\psi_1$. 
+    Steady-state average velocities of the (a) internal ($\psi_1$) and (b) translational ($q_1$) degrees of freedom as a function of the DC field $h_0$, for $h_a=0$ (dashed black) and $h_a=5$ (solid blue). White regions indicate the synchronization steps, where $\langle\dot\psi_1\rangle_\tau$ locks to integer multiples of the driving frequency [dotted horizontal lines in (a)]. Vertical red dotted lines indicate synchrony boundaries as given by Eq.~\eqref{eq:width_steps}; their second-order approximation, given by Eq.~\eqref{eq:h0_2order}, is shown as green dashed lines. Walker-breakdown-like spikes in $\langle\dot q_1\rangle_\tau$ recur in (b) at each unlocking transition of $\psi_1$. 
     }
     \label{fig:ej_walker}
 \end{figure}
@@ -296,7 +301,7 @@ Finally, each step is centered at $h_{0}=n\Omega/\alpha$ and has a field-range w
 \end{equation}
 
 
-The details of the continuation of this perturbative treatment to second order in $\epsilon$ are worked out in Appendix~\ref{ap:segundo_orden}. The only second order effect is a rigid shift depending only on $\alpha h_\text{a}/\Omega$ in the synchronization steps with $|n|>0$. The correction is more significant for the smaller absolute values of $n$ and $h_\text{a}$, vanishing in the limits where either variable goes to infinity. For the $n=0$ step, the second order corrections vanish identically. \aleadd{In Fig. \ref{fig:ej_walker} we can compare first and second order corrections.}
+The details of the continuation of this perturbative treatment to second order in $\epsilon$ are worked out in Appendix~\ref{ap:segundo_orden}. The only second order effect is a rigid shift depending only on $\alpha h_\text{a}/\Omega$ in the synchronization steps with $|n|>0$. The correction is more significant for the smaller absolute values of $n$ and $h_\text{a}$, vanishing in the limits where either variable goes to infinity. For the $n=0$ step, the second order corrections vanish identically. In Fig. \ref{fig:ej_walker}, vertical dotted-red and  dashed-green lines correspond to first and second order approximations, respectively.
 
 % In a synchronized state, solutions should be of the form
 % \begin{equation}
@@ -672,7 +677,7 @@ where $P_\kappa(\tau)$ is a $2\pi$-periodic matrix and $R_\kappa$ is a constant 
     \label{fig:sync_stability}
 \end{figure}
 
-Figure~\ref{fig:sync_stability} shows the resulting stability diagrams obtained numerically for $h_a=2$ (a) and $h_a=3$ (b), at $\alpha=0.27$ and $\Omega=1$, as an illustrative example. Although the rigid DW is synchronized within the corresponding Shapiro steps, finite intervals of $h_0$ exhibit spatial instabilities. These unstable regions are generally located near the boundaries of the synchronization steps and are characterized by a finite range of wavenumbers with Floquet multipliers satisfying $|\mu_\kappa|>1$. Thus, synchronization of the internal precessional dynamics if the rigid DW does not necessarily imply spatial stability of the extended flexible DW. Instead, a synchronized flat DW can coexist with a band of unstable spatial modes, whose growth rates depend continuously on $\kappa$. The nonlinear evolution of these instabilities, \aleadd{and also the possible instabilities of non synchronized flat walls (for which Floquet analysis is not adapted)}, and their effect on the long-time DW structure are investigated in the following section.
+Figure~\ref{fig:sync_stability} shows the resulting stability diagrams obtained numerically for $h_a=2$ (a) and $h_a=3$ (b), at $\alpha=0.27$ and $\Omega=1$, as an illustrative example. Although the rigid DW is synchronized within the corresponding Shapiro steps, finite intervals of $h_0$ exhibit spatial instabilities. These unstable regions are generally located near the boundaries of the synchronization steps and are characterized by a finite range of wavenumbers with Floquet multipliers satisfying $|\mu_\kappa|>1$. Thus, synchronization of the internal precessional dynamics of the rigid DW does not necessarily imply spatial stability of the extended flexible DW. Instead, a synchronized flat DW can coexist with a band of unstable spatial modes, whose growth rates depend continuously on $\kappa$. The nonlinear evolution of these instabilities, and also the possible instabilities of non synchronized flat walls (for which Floquet analysis is not adapted), and their effect on the long-time DW structure are investigated in the following section.
 
 
 % Figure~\ref{fig:walker_sync} shows a map of the regions or Arnold tongues~\cite{Pikovsky_Rosenblum_Kurths_2001}, for which the rigid DW equations, Eqs.~\eqref{eq:walker_tau}, have a synchronized solution as a function of $h_0$ and $h_\text{a}$ for $\alpha = 0.27$ and $\Omega = 1$, as well as whether they are linearly stable in the extended DW model. The gray regions do not admit a time-periodic solution. White indicates that the time-periodic rigid DW solution is also stable. Color indicates the maximum Floquet multiplier across all wavenumbers in the cases for which the periodic solution is not stable. Dashed lines outline the boundaries of the stability region as given by the small-nonlinearity approximation \eqref{eq:walker_steps}. The approximation is in good agreement with the exact results, especially for the zeroth synchrony step and for high $h_\text{a}$ values. Fig.~\ref{fig:sync_stability} shows the full stability diagram for $h_\text{a} =2.15$ (a) and $h_\text{a} = 4$ (b), both of which display instabilities for some values of $h_0$. Instability regions are generally found to be located near the edges of a synchrony region.
@@ -771,9 +776,30 @@ We now investigate the long-time dynamics under the combined DC+AC field, going 
 %
 The time averages are taken after the system has reached its long-time dynamical regime.}
 
-\luzcom{
-We characterize synchronization with the external drive through the quantity $\left\langle \sigma^2\right\rangle_x$ by sampling the displacement of the DW $u(x,t+2T_\text{drive})-u(x,t)$ stroboscopically, at intervals of twice the period of the drive $T_\text{drive}=2\pi/\Omega$. For each point on the wall, we compute the variance of these displacements over time, and then we average the variances across the wall. When the system is phase-locked to the drive, the stroboscopic displacement at each point is identical in every cycle, resulting in $\left\langle\sigma^2\right\rangle_x\approx 0$. Otherwise, the displacement fluctuates over successive cycles, yielding a finite value of $\left\langle\sigma^2\right\rangle_x$. Sampling at twice the driving period allows us to detect synchrony to both harmonic and subharmonic frequencies. 
+% \luzcom{
+% We characterize synchronization with the external drive through the quantity $\left\langle \sigma^2\right\rangle_x$ by sampling the displacement of the DW $u(x,t+2T_\text{drive})-u(x,t)$ stroboscopically, at intervals of twice the period of the drive $T_\text{drive}=2\pi/\Omega$. For each point on the wall, we compute the variance of these displacements over time, and then we average the variances across the wall. When the system is phase-locked to the drive, the stroboscopic displacement at each point is identical in every cycle, resulting in $\left\langle\sigma^2\right\rangle_x\approx 0$. Otherwise, the displacement fluctuates over successive cycles, yielding a finite value of $\left\langle\sigma^2\right\rangle_x$. Sampling at twice the driving period allows us to detect synchrony to both harmonic and subharmonic frequencies. 
+% }
+\aleadd{
+We characterize synchronization with the external drive through the quantity
+$\langle\sigma^2\rangle_x$, obtained by sampling the DW displacement
+stroboscopically at intervals of twice the drive period,
+$T_\text{drive}=2\pi/\Omega$. At each point $x$ we compute the variance over time of
+$\Delta u(x,t)=u(x,t+2T_\text{drive})-u(x,t)$,
+\begin{equation}
+  \sigma^2(x)=\overline{\Delta u^{2}}-\overline{\Delta u}^{\,2},
+\end{equation}
+where the overbar denotes the average over the sampling times
+$t_m=t_0+2mT_\text{drive}$ ($m=0,1,2,\dots$), and then average along the wall,
+$\langle\sigma^2\rangle_x=L^{-1}\!\int_0^L\sigma^2(x)\,dx$.
+When the DW is phase-locked to the drive, $\Delta u(x,t)$ takes the same value
+at every sampling time, so that $\langle\sigma^2\rangle_x\approx 0$. Otherwise,
+$\Delta u$ fluctuates from one sample to the next and $\langle\sigma^2\rangle_x$
+takes a finite value. \new{Since $\psi=2\phi$, a locked precession can have $\langle\dot\phi\rangle=\Omega/2$, and the corrugation of the wall may also be period-doubled by the Floquet instability (multipliers $\mu_\kappa<0$).} Sampling at $2T_\text{drive}$, rather than at $T_\text{drive}$,
+allows us to detect locking to both the harmonic (period $T_\text{drive}$) and
+subharmonic (period $2T_\text{drive}$) responses.
 }
+
+
 %
 % \begin{equation}
 % \sigma =
@@ -791,19 +817,28 @@ We characterize synchronization with the external drive through the quantity $\l
 
 \aleadd{
 To highlight finite-size effects, we consider a small system with $L/L_0=8$, for which the first nonzero mode is $\kappa=2\pi/8\approx 0.785$, and a large system with $L/L_0=1024$. The latter provides access to the extended-wall regime in which deterministic spatiotemporal chaos occurs under purely DC driving~\cite{pusiol2026deterministic}, whereas the small system is strongly affected by the discrete set of available spatial modes. This comparison allows us to distinguish finite-size effects from the behavior associated with a broad spectrum of flexural modes.
-
-\alecom{
-Sacaria la fig \ref{fig:wall_metrics}(a), ya que podriamos correlacionar todo con la Fig \ref{fig:sync_stability}(b) pero si ponemos $h_a=3$ en vez de 4 y con rango extendido $0<h<8$.}
-
-
-\alecom{
-\begin{itemize}
-    \item Describir las tres figuras cualitativamente.
-    \item Describir zonas donde tenemos Floquet.
-    \item Describir zonas donde no tenemos Floquet, pero sin embargo puede o no haber estabilidad.
-    \item Concluir con la existencia de varias fases para dar pie a la proxima section.
-\end{itemize}
 }
+
+
+% \alecom{
+% \begin{itemize}
+%     \item Describir las tres figuras cualitativamente.
+%     \item Describir zonas donde tenemos Floquet.
+%     \item Describir zonas donde no tenemos Floquet, pero sin embargo puede o no haber estabilidad.
+%     \item Concluir con la existencia de varias fases para dar pie a la proxima section.
+% \end{itemize}
+% }
+
+\aleadd{
+Figure~\ref{fig:wall_metrics} summarizes the steady-state response of extended domain walls as a function of $h_0$, comparing the large and small systems. The rigid-wall dynamics are also included for comparison (dashed black lines). In Fig.~\ref{fig:wall_metrics}(b), both extended walls display synchronization steps at $\langle\dot\phi\rangle_{x,t}=\Omega/2$ and \new{$\Omega$}, although the step is narrower for the large DW. Figure~\ref{fig:wall_metrics}(a) shows that $\langle\dot u \rangle_{x,t}$ \new{increases linearly with $h_0$} in the synchronized regions and displays a Walker-breakdown\new{-like feature} at the frequency unlocking edges. In the non-synchronized regions, both for the large and the small systems, $\langle\dot u \rangle_{x,t}$ differs appreciably from the rigid wall solution. The small system displays a jerky response in these regions associated to \new{a sparse} discrete set of unstable modes, while the large system displays a smoother response due to their higher density of unstable modes. These instabilities are reflected in the high values of \new{$\langle w^2 \rangle_{t}$} in the non-synchronized regions in Figure \ref{fig:wall_metrics}(c). Interestingly however, inside the synchronized regions or Shapiro steps, we can also observe a large departure from the rigid-wall solution for both the small and large systems. This behavior can be linked to the linear Floquet \new{instability} shown in Figure \ref{fig:sync_stability}\new{(b)}, displaying a band of unstable modes within the Shapiro step, and the differences between the small and large systems can be traced back to the discrete set of modes overlapping such continuous band predicted by Floquet theory. We note that the presence of the band can be innocuous for the small systems if \new{none} of its discrete modes overlap the band, as it is observed 
+in the jump to zero of \new{$\langle w^2 \rangle_{t}$} in the middle of the step, for $L/L_0=8$.
+}
+
+\aleadd{In summary, Figure~\ref{fig:wall_metrics} 
+illustrate different kinds of dynamical regimes which can differ and sometimes coincide with the rigid-wall solution under combined DC and AC drives. In particular, we observe that the full dynamics properties of the $u-\phi$ model can be related to mode linear instabilities, as for the pure DC case \cite{pusiol2026deterministic}, within the Shapiro steps. At variance with the DC case however, Floquet theory can not be applied outside the steps.
+}
+
+% \luzcom{estaba empezando a describir la figura 4 en relación con la 3}
 
 % Figure~\ref{fig:wall_metrics} summarizes the response of the two extended walls for a fixed AC amplitude $h_\text{a}=3$. Panel (a) shows the absolute value of the Floquet multiplier for the mode $\kappa=2\pi/7$ along the synchronized rigid-wall solutions as a function of $h_0$. Floquet analysis is only defined within the synchronization steps, where the rigid-wall solution is time-periodic. Panels (b)--(d) show the mean DW velocity, mean angular velocity, and roughness for the two system sizes, together with the corresponding rigid-wall result. In all panels, the white and gray regions indicate the existence of synchronized and unsynchronized rigid-wall solutions, respectively.
 \begin{figure}[htbp]
@@ -813,7 +848,7 @@ Sacaria la fig \ref{fig:wall_metrics}(a), ya que podriamos correlacionar todo co
     \put(15, 62){\textbf{(b)}}
     \put(15, 33){\textbf{(c)}}
 \end{overpic}
-\caption{Flexible extended domain wall dynamics. (a) Mean DW velocity $\langle\dot u\rangle_{x,t}$ and (b) mean precessional velocity $\langle\dot\phi\rangle_{x,t}$ for extended walls of sizes $L/L_0=8$ and $1024$, together with the rigid-wall result (dashed black lines). (c) Steady-state roughness $\langle w^2\rangle_t$ for the two extended-wall sizes. Values smaller than $10^{-6}$ are shown at $10^{-6}$ for visualization. White and gray regions correspond to synchronized and unsynchronized rigid-wall solutions, respectively. Horizontal dotted lines in (b) indicate the Shapiro steps at $\langle\dot\phi\rangle_{x,t} = \Omega/2 = 0.5$ and $\Omega = 1$. All simulations were performed with $\alpha=0.27$, $\Omega=1$, and $h_\text{a}=3$.}
+\caption{Flexible extended domain wall dynamics. (a) Mean DW velocity $\langle\dot u\rangle_{x,t}$ and (b) mean precessional velocity $\langle\dot\phi\rangle_{x,t}$ for extended walls of sizes $L/L_0=8$ (blue continuous line) and $1024$ (red continuous line), together with the rigid-wall result (dashed black lines). (c) Steady-state roughness $\langle w^2\rangle_t$ for the two extended-wall sizes. Values smaller than $10^{-6}$ are shown at $10^{-6}$ for visualization. White and gray regions correspond to synchronized and unsynchronized rigid-wall solutions, respectively. \new{\textbf{[TODO: state which line color corresponds to each system size.]}} Horizontal dotted lines in (b) indicate the Shapiro steps at $\langle\dot\phi\rangle_{x,t} = \Omega/2 = 0.5$ and $\Omega = 1$. All simulations were performed with $\alpha=0.27$, $\Omega=1$, and $h_\text{a}=3$.}
 \label{fig:wall_metrics}
 \end{figure}
 
@@ -825,7 +860,6 @@ Sacaria la fig \ref{fig:wall_metrics}(a), ya que podriamos correlacionar todo co
 
 % When a synchronized flat state contains linearly unstable spatial modes, the initially flat configuration becomes corrugated if the system size permits one or more modes within the unstable region. Importantly, the resulting nonlinear state need not lose temporal synchronization: spatial instability can coexist with frequency locking. Thus, the extended DWs can exhibit both flat and corrugated synchronized states, in addition to flat states without synchronization. The synchronized corrugated state, which has finite roughness while remaining temporally synchronized, is analyzed in detail below. We characterize its spatial structure and, together with the other dynamical states, construct the dynamical phase diagram in the $(h_0,h_a)$ plane for fixed AC frequency.
 % }
-}
 
 % \aleadd{
 % \section{Dynamical Phases}
@@ -880,7 +914,7 @@ NR
 \end{tabular}
 \caption{Characterization of the dynamical phases in terms of the spatial
 structure of $u$, synchronization of the domain-wall precession $\phi$
-with the external drive, and coherence of the precessional dynamics.
+with the external drive, and coherence of the precessional dynamics. The PF phase has no average precession of the DW and it remains flat.
 The SF and SP phases are synchronized and exhibit coherent domain-wall
 precession, while the NF phase corresponds to coherent but
 non-synchronized precession. In the NR phase, the precession becomes
@@ -967,7 +1001,7 @@ of linearly unstable modes.}
         \put(72, 13){\textbf{(b)}}
     \end{overpic}
     
-    \caption{Universal scaling and exponent analysis of the non-synchronized rough (NR) phase ($h_0=5,\, h_\text{a} = 3,\, \Omega=1,\, \alpha=0.27$, for $L/L_0=1000$). (a) Main panel: Structure factor $S_\kappa$ as a function of wavenumber $\kappa$ at different times $t$ during the transient growth regime, with the dashed line indicating the asymptotic power-law decay $S_\kappa\propto\kappa^{-2}$. Curves are color-coded by time $t$ according to the colorbar above. Inset: Scaling collapse onto the universal master curve $S_\kappa t^{-1}$ versus $\kappa t^{1/2}$, demonstrating dynamic scaling consistent with $S(\kappa,t)\sim \kappa^{-(1+2\zeta)}F(\kappa t^{1/z})$ with roughness exponent $\zeta=1/2$ and dynamic exponent $z=2$. (b) Domain-wall roughness $w^2$ as a function of time $t$; the dashed line illustrates the characteristic growth regime $w^2\propto t^{1/2}$. These scaling relations confirm that the NR phase under combined DC+AC driving belongs to the one-dimensional Edwards--Wilkinson universality class.}    
+    \caption{Universal scaling and exponent analysis of the non-synchronized rough (NR) phase ($h_0=5,\, h_\text{a} = 3,\, \Omega=1,\, \alpha=0.27$, for $L/L_0=1000$). (a) Main panel: Structure factor $S_\kappa$ as a function of wavenumber $\kappa$ at different times $t$ during the transient growth regime, with the dashed line indicating the asymptotic power-law decay $S_\kappa\propto\kappa^{-2}$. Curves are color-coded by time $t$ according to the colorbar above. Inset: Scaling collapse onto the universal master curve $S_\kappa t^{-1}$ versus $\kappa t^{1/2}$, demonstrating dynamic scaling consistent with $S(\kappa,t)\sim \kappa^{-(1+2\zeta)}F(\kappa t^{1/z})$ with roughness exponent $\zeta=1/2$ and dynamic exponent $z=2$. (b) Domain-wall roughness $w^2$ as a function of time $t$; the dashed line illustrates the characteristic growth regime $w^2\propto t^{1/2}$. These scaling relations \new{are consistent with} the NR phase under combined DC+AC driving \new{belonging} to the one-dimensional Edwards--Wilkinson universality class.}    
     \label{fig:estructura}
 \end{figure}
 
@@ -1000,7 +1034,7 @@ of linearly unstable modes.}
 \begin{figure}[hbtp]
     \centering
     \includegraphics[width=\linewidth]{figuras/sc_cascade.pdf}
-    \caption{Snapshots of the relative domain-wall displacement $u(x,t)-\langle u\rangle_x$ along a section of the DW in the steady-state synchronized periodic (SP) phase ($h_0=4$, $h_\text{a}=3$, $\alpha=0.27$, and $\Omega=1$), taken at evenly spaced intervals over a full period of the AC drive (as indicated by the oscillation of $\cos(\Omega t)$ on the right).}
+    \caption{Snapshots of the relative domain-wall displacement $u(x,t)-\langle u\rangle_x$ along a section of the DW in the steady-state synchronized periodic (SP) phase ($h_0=4$, $h_\text{a}=3$, $\alpha=0.27$, and $\Omega=1$), taken at evenly spaced intervals over two full periods of the AC drive (as indicated by the oscillation of $\cos(\Omega t)$ on the right).}
     \label{fig:sc_cascade}
 \end{figure}
 
@@ -1086,19 +1120,19 @@ of linearly unstable modes.}
 % \fabriq{Aquí cuando hablamos de los límites de estabilidad lineal, podríamos aclarar que la línea punteada marca el límite inferior (onset) de la región de estabilidad y lo que queda por debajo es inestable.}
 
 
-We are now in a position to discuss the main result of this work: the full dynamical phase diagram in the $(h_0,h_a)$ plane at fixed AC frequency. Figure~\ref{fig:fases} shows five distinct dynamical regimes: pinned flat (PF), synchronized flat (SF), synchronized periodic (SP), non-synchronized flat (NF), and non-synchronized rough (NR). The phase diagram corresponds to $L/L_0=256$, for which finite-size effects are negligible on the scale considered. Finite-size effects become visible for substantially smaller systems (see Appendix~\ref{ap:finitesizephasediagram}), so we use the $L/L_0=256$ results as representative of the $L\to\infty$ dynamical phase diagram. Synchronization is identified by $\sigma<0.01$. The continuous and dotted gray lines indicate, respectively, the synchronization boundaries and the linear-stability boundaries of the corresponding synchronized flat rigid-wall solutions. These boundaries provide a reference for the long-time dynamics of the full nonlinear extended-wall equations: the continuous lines delimit the parameter regions where the corresponding rigid-wall solutions are synchronized, while the dotted lines indicate where these synchronized flat solutions become spatially unstable.
+We are now in a position to discuss the main result of this work: the full dynamical phase diagram in the $(h_0,h_a)$ plane at fixed AC frequency. Figure~\ref{fig:fases} shows five distinct dynamical regimes: pinned flat (PF), synchronized flat (SF), synchronized periodic (SP), non-synchronized flat (NF), and non-synchronized rough (NR). The phase diagram corresponds to $L/L_0=256$, for which finite-size effects are negligible on the scale considered. Finite-size effects become visible for substantially smaller systems (see Appendix~\ref{ap:finitesizephasediagram}), so we use the $L/L_0=256$ results as representative of the $L\to\infty$ dynamical phase diagram. Synchronization is identified by \new{$\langle\sigma^2\rangle_x<10^{-4}$ (i.e., $\sigma\equiv\langle\sigma^2\rangle_x^{1/2}<0.01$ in units of $u_0$). \textbf{[TODO: state the numerical criteria used to separate flat/rough ($w^2$ threshold), PF ($\langle\dot\phi\rangle=0$) and coherent/incoherent precession (NF vs.\ NR).]}} The continuous \new{white} and \new{dashed black} lines indicate, respectively, the synchronization boundaries and the linear-stability boundaries of the corresponding synchronized flat rigid-wall solutions. These boundaries provide a reference for the long-time dynamics of the full nonlinear extended-wall equations: the continuous lines delimit the parameter regions where the corresponding rigid-wall solutions are synchronized, while the \new{dashed} lines indicate where these synchronized flat solutions become spatially unstable.
 
 
 In the PF phase, $\langle\dot{\phi}\rangle=0$, so the DW does not exhibit average internal precession, although its mean position $\langle u\rangle$ can still evolve in time. The effective Walker breakdown field in presence of AC drive follows $h_W \approx |J_0(\alpha h_a/\Omega)|$, as predicted by the equality in Eq.\eqref{eq:walkerwithAC} for the particular $n=0$ case. The remaining four regimes combine temporal synchronization with distinct spatial structures. The SF and SP phases are synchronized, whereas NF and NR are non-synchronized. Spatially, SF and NF remain essentially flat, while SP develops a periodic corrugation and NR exhibits roughening. 
-The SP regime occupies a comparatively narrow regions, for relatively low values of $h_a$, at the bottom of the synchronization regions. 
+The SP regime occupies a comparatively narrow region, for relatively low values of $h_a$, at the bottom of the $n=1$ synchronization region. 
 % In the following, we focus on the large-system behavior and characterize the spatial and temporal properties of the different regimes.
 
 The synchronization regions of the extended domain wall remain close to those obtained from the rigid-wall dynamics (delimited by the continuous lines) over most of the phase diagram. These lines are described by Eqs.\eqref{eq:walkerwithAC} and \eqref{eq:width_steps}. 
-Deviations due to the flexural modes of the extended DW are most pronounced near the edges of the synchronization steps and in the region where the SP state develops. In these regions, the Floquet stability analysis of the synchronized rigid-wall solution provides a direct indication of the onset of spatial instabilities (indicated by the dotted lines). In Fig. \ref{fig:fases} we also observe that the dotted lines provide an approximation for the onset of instabilities inside the synchronized phase of the rigid DW.
+Deviations due to the flexural modes of the extended DW are most pronounced near the edges of the synchronization steps and in the region where the SP state develops. In these regions, the Floquet stability analysis of the synchronized rigid-wall solution provides a direct indication of the onset of spatial instabilities (indicated by the \new{dashed} lines). In Fig. \ref{fig:fases} we also observe that the \new{dashed} lines provide an approximation for the onset of instabilities inside the synchronized phase of the rigid DW.
 Thus, synchronization and spatial stability are related but distinct properties of the driven wall. 
 
 The AC drive can qualitatively modify the dynamics observed under pure DC driving. It can suppress roughening and stabilize a synchronized flat state, or it can synchronize a spatially unstable state, leading to the SP regime. Conversely, non-synchronized flat states can also occur under AC driving. The resulting phase diagram therefore reflects the interplay between temporal synchronization and spatial stability rather than a single synchronization transition.
-Since the flat phases indistinguishable from the rigid-wall solutions, in the following we solely characterize the non-flat phases.
+Since the flat phases \new{are} indistinguishable from the rigid-wall solutions, in the following we solely characterize the non-flat phases.
 
 
 We first characterize the NR regime. To quantify its spatial structure, we analyze the roughening process and consider the \textit{time-dependent} structure factor starting from an initially perturbed flat DW
@@ -1117,7 +1151,8 @@ w^2 =
 where the averages are done over random realizations of the perturbed initial DW. 
 
 
-During the transient growth regime that nucleates the NR phase, 
+
+During the transient growth regime that nucleates the NR phase,
 shown in Fig.~\ref{fig:estructura},
 the structure factor follows the scaling form
 \begin{equation}
@@ -1129,11 +1164,40 @@ Correspondingly, the roughness grows as
 \begin{equation}
 w^2 \propto t^{1/2}.
 \end{equation}
-These scaling properties are consistent with the one-dimensional Edwards--Wilkinson universality class, where $w^2 \sim t^{2\zeta/z}$ and $S(q)\sim q^{-(1+2\zeta)}F(q t^{1/z})$, with a roughness exponent $\zeta=1/2$ and dynamic exponent $z=2$. The NR phase under DC+AC drive is thus in the same the universality class as in the purely DC-driven case \cite{pusiol2026deterministic}.
+These scaling properties are consistent with the one-dimensional Edwards--Wilkinson (EW) universality class, where $w^2 \sim t^{2\zeta/z}$ and $S(q)\sim q^{-(1+2\zeta)}F(q t^{1/z})$, with a roughness exponent $\zeta=1/2$ and dynamic exponent $z=2$.
+\new{The collapse in terms of $\kappa t^{1/2}$ singles out $z=2$ and rules out the Kardar--Parisi--Zhang (KPZ) class, which shares $\zeta=1/2$ in one dimension but has $z=3/2$ and would require the variable $\kappa t^{2/3}$ and $w^2\sim t^{2/3}$.
+This is expected since, within the $u$--$\phi$ model, tilt invariance ($u\to u+sx$ leaves Eqs.~\eqref{eq:uphi} unchanged, as they depend on $u$ only through $\partial_x^2u$) forbids the KPZ nonlinearity $\lambda(\partial_xu)^2$, irrespective of the internal degree of freedom $\phi$.
+Geometric corrections beyond the small-slope approximation, which are neglected here, could nevertheless produce a crossover to KPZ at very large scales.}
+% \new{\textbf{[TODO: complement with the stationary scaling $w^2_\text{sat}\propto L$ and check that $t\ll L^2$ in the fitted window.]}}
+The NR phase under DC+AC drive is thus in the same universality class as in the purely DC-driven case \cite{pusiol2026deterministic}.
+
+
+
+% During the transient growth regime that nucleates the NR phase, 
+% shown in Fig.~\ref{fig:estructura},
+% the structure factor follows the scaling form
+% \begin{equation}
+% S_\kappa \propto \kappa^{-2}F(\kappa \, l(t)),
+% \end{equation}
+% with a growing length-scale $l(t)\sim t^{1/2}$, while $F(x)\sim x^2$ for small $x$ and approaches a constant for large $x$.
+% As shown in the inset of Fig.~\ref{fig:estructura}(a), the rescaled data $S_\kappa t^{-1}$ collapse onto a single universal curve when plotted against $\kappa t^{1/2}$.
+% Correspondingly, the roughness grows as
+% \begin{equation}
+% w^2 \propto t^{1/2}.
+% \end{equation}
+% These scaling properties are consistent with the one-dimensional Edwards--Wilkinson universality class, where $w^2 \sim t^{2\zeta/z}$ and $S(q)\sim q^{-(1+2\zeta)}F(q t^{1/z})$, with a roughness exponent $\zeta=1/2$ and dynamic exponent $z=2$.
+% % \new{\textbf{[TODO: complement with the stationary scaling $w^2\propto L$, and check that $t\ll L^2$ in the fitted window.]}} 
+% {\color{red} This is consistent with the fact that within the $u$–$\phi$ model, tilt invariance forbids the KPZ nonlinearity; geometric corrections beyond the small-slope approximation, which are neglected here, could nevertheless produce a crossover to KPZ at very large scales.}
+
+
+
+% The NR phase under DC+AC drive is thus in the same universality class as in the purely DC-driven case \cite{pusiol2026deterministic}.
+
+
 
 We next turn to the SP regime. Figure~\ref{fig:sc_cascade} shows representative configurations over one period of the AC drive. The wall develops a periodic corrugation whose amplitude oscillates in time, while the spatial profile recurs periodically. The roughness approaches a finite value as the system size increases, and the dominant wave number remains finite, indicating that the corrugation is not a finite-size artifact. 
 
-The spatial periodicity of the SP phase is directly related to the Floquet instability of the synchronized flat state. In the unstable region, a finite band of wave numbers has Floquet multipliers larger than unity, with a maximum growth rate at a characteristic wave number $\kappa^*$. The nonlinear SP state is dominated by a wave number $\kappa_{\rm peak}$ that approaches a finite value with increasing system size and is consistent with the Floquet-selected $\kappa^*$ (indicated by the dashed horizontal line). Figure~\ref{fig:estructuraSCvsL} shows that both the roughness and $\kappa_{\rm peak}$ converge as $L$ increases. For sufficiently small systems, the allowed wave numbers may not sample the unstable band adequately; in that case the wall can remain effectively flat even when the corresponding continuum system is spatially unstable.
+The spatial periodicity of the SP phase is directly related to the Floquet instability of the synchronized flat state. In the unstable region, a finite band of wave numbers has Floquet multipliers larger than unity, with a maximum growth rate at a characteristic wave number $\kappa^*$. The nonlinear SP state is dominated by a wave number $\kappa_{\rm peak}$ that approaches a finite value with increasing system size and is consistent with the Floquet-selected $\kappa^*$ (indicated by the \new{dotted} horizontal line). Figure~\ref{fig:estructuraSCvsL} shows that both the roughness and $\kappa_{\rm peak}$ converge as $L$ increases. For sufficiently small systems, the allowed wave numbers may not sample the unstable band adequately; in that case the wall can remain effectively flat even when the corresponding continuum system is spatially unstable. \new{\textbf{[TODO: give the numerical limits of the unstable band at $h_0=4$, $h_\text{a}=3$; note that for $L/L_0=8$ the first mode $\kappa_1\approx0.785$ lies close to $\kappa^\ast$ yet the wall remains flat, so the band must be narrower than this separation.]}}
 
 The finite-size analysis therefore demonstrates that the periodic corrugation in the SP regime has an intrinsic spatial scale selected by the linear instability of the synchronized state. In the large-system limit, the SP phase exhibits long-range spatial periodic order together with temporal synchronization.
 
@@ -1157,7 +1221,7 @@ The main properties of the five dynamical phases are summarized in Table~\ref{ta
 \section{Conclusions}
 We investigated synchronization in extended domain walls driven by combined DC and AC magnetic fields and its relation to spatial order. We showed that synchronization can occur even in very large systems exhibiting spatiotemporal chaos in the purely DC-driven regime. Synchronization is generally accompanied by a suppression of this chaotic dynamics and, in most cases, by a flattening of the domain wall. However, synchronized regimes with a periodically corrugated spatial structure also exist. In this regime, the corrugation is dominated by a finite band of linearly unstable modes with a well-defined maximum growth rate, linking the spatial structure of the nonlinear state to the Floquet instability of the synchronized flat state. The resulting dynamical phase diagram, shown in Figure~\ref{fig:fases}, summarizes these different regimes.
 
-The AC field amplitudes required to drive a chaotic domain wall into the SP phase are of the order of the Walker field. For a thin Co/Pt multilayer, the minimum AC amplitude required is of order $10$ mT, with frequencies on the order of $100$ MHz. These conditions are experimentally accessible (see Appendix~\ref{ap:exp_cond} for the correspondence between the model parameters and physical units). The finite-size effects identified in this work may also be relevant for experimentally accessible micrometer-scale systems.
+The AC field amplitudes required to drive a chaotic domain wall into \new{a synchronized phase (SF or SP)} are of the order of the Walker field. For a thin Co/Pt multilayer, the minimum AC amplitude required \new{to reach the SF phase} is of order $10$ mT, with frequencies on the order of $100$ MHz. These conditions are experimentally accessible (see Appendix~\ref{ap:exp_cond} for the correspondence between the model parameters and physical units). The finite-size effects identified in this work may also be relevant for experimentally accessible micrometer-scale systems.
 
 The framework developed here neglects disorder and thermal fluctuations \cite{ferre2013,ferrero2021creep}, which may affect the experimental observation of the predicted dynamical regimes. Nevertheless, the present theory provides a basis for extending the analysis to more realistic domain-wall models that incorporate these effects. The framework can also be generalized to higher-dimensional geometries and to electrical current drives, providing directions for future studies.
 
@@ -1177,7 +1241,7 @@ We work out the conversion of our nondimensional model into physical units for t
 
 The length scales for this material are $\Delta\approx6.6$~nm and $L_0\approx8.77\Delta\approx58.0$~nm. This means that representative values of $L/L_0$ such as 8, 256, and 1024 used throughout our work correspond to DW lengths of $\approx 464$~nm, $14.8$~$\mu$m, and $59.4$~$\mu$m, respectively ($L/L_0 = 1000$ corresponds to $58.0$~$\mu$m, while the finite-size scaling in Fig.~\ref{fig:estructuraSCvsL} extends up to $L/L_0 \approx 2.6\times 10^5 \approx 15$~mm). The limiting thermodynamic behavior begins to occur for lengths of order $100\, L_0\approx5.8$~$\mu$m.
 
-The time unit in this system is $T_0 \approx0.33$~ns, which corresponds to a frequency unit of $3.03$~GHz. The angular frequency $\Omega=1$ used in this work corresponds to a real frequency of 480~MHz. The wavelength corresponding to this frequency is $0.6$~m, many orders of magnitude above both length scales of the system. 
+The time unit in this system is $T_0 \approx0.33$~ns, which corresponds to \new{an angular-frequency unit $1/T_0\approx3.03\times10^{9}$~s$^{-1}$.} The angular frequency $\Omega=1$ used in this work corresponds to a real frequency of 480~MHz. The wavelength corresponding to this frequency is $0.6$~m, many orders of magnitude above both length scales of the system. 
 
 The Walker breakdown field is $H_\text{W}\approx2.48$~mT. As a specific example, to drive the system in the SF regime at $H_0=4H_\text{W}\approx10$~mT, with a frequency of $\Omega=1$ (480~MHz), the AC field amplitude should be at least $H_\text{a}\approx3.5H_\text{W}\approx9$~mT.
 
@@ -1193,7 +1257,7 @@ The partial differential equations (PDEs) for the full $u$--$\phi$ model (Eqs. \
 \end{equation}
 the $u$--$\phi$ model is equivalent to the single complex PDE
 \begin{equation}
-    \dot z = \frac{\alpha-i}{2}[\alpha h(t) + i \sin\left(2\operatorname{Im}(z)\right)+z'']\, .
+    \dot z = \frac{\alpha-i}{2}[\alpha h(t) \new{-} i \sin\left(2\operatorname{Im}(z)\right)+z'']\, .
     \label{eq:z_eq}
 \end{equation}
 
@@ -1201,7 +1265,7 @@ Now we separate the right-hand side of Eq.~\eqref{eq:z_eq} into a linear and a n
 \begin{equation}
 \begin{split}
     \mathcal L(z) &= \frac{\alpha-i}{2}z'' \, ,\\
-    \mathcal{N}(z)&=\frac{\alpha-i}{2}[\alpha h(t)+i\sin\left(2\operatorname{Im}(z)\right)]\ .
+    \mathcal{N}(z)&=\frac{\alpha-i}{2}[\alpha h(t)\new{-}i\sin\left(2\operatorname{Im}(z)\right)]\ .
 \end{split}
     \label{eq:lin_nonlin}
 \end{equation}
@@ -1258,7 +1322,7 @@ In Figure~\ref{fig:phasediagram_smallL}, we show the dynamical phase diagram for
 We can continue the expansion of Eq.~\eqref{eq:expansion2} to second order in $\epsilon$. To do this we expand $\epsilon\sin(\psi_1) \approx \epsilon \sin\left(\psi^{(0)}\right) + \epsilon^2 \psi^{(1)} \cos\left(\psi^{(0)}\right)$, substitute into Eq.~\eqref{eq:walker_pert} and collect the terms of order $\epsilon^2$. We obtain:
 %
 \begin{equation}
-\dot{\psi}_1^{(2)} = \tilde h_0^{(2)} - \psi^{(1)} \cos\left(\psi^{(0)}\right).
+\dot{\psi}^{(2)} = \tilde h_0^{(2)} - \psi^{(1)} \cos\left(\psi^{(0)}\right).
     \label{eq:dot_psi_2}    
 \end{equation}
 
@@ -1315,11 +1379,9 @@ In the limit $h_\text{a}=0$, the only term contributing to $A$ is the one propor
 
 Figure \ref{fig:ej_walker} compares first and second order approximations for the Shapiro steps location.
 
-
-
 % \input{supporting_information}
 \bibliography{refs}   % without the .bib extension
 
-\tableofcontents
+% \tableofcontents % removed (review)
 
 \end{document}

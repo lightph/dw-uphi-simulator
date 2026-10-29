@@ -39,6 +39,7 @@ Official C++17 / CUDA high-performance simulation framework, analytical perturba
   - [Figure 7: Spatiotemporal Cascade of the SP Phase](#figure-7-spatiotemporal-cascade-of-the-sp-phase)
   - [Figure 8: Finite-Size Scaling of the SP Phase](#figure-8-finite-size-scaling-of-the-sp-phase)
   - [Figure 9: Small-System Phase Diagram ($L/L_0=8$)](#figure-9-small-system-phase-diagram-ll_08)
+- [Simulation Data Regeneration Suite (CPU, GPU, SLURM)](#simulation-data-regeneration-suite-cpu-gpu-slurm)
 - [Prerequisites & Build System](#prerequisites--build-system)
   - [System Dependencies](#system-dependencies)
   - [Automated Quick Builds](#automated-quick-builds)
@@ -306,6 +307,59 @@ Individual figures can also be reproduced or re-simulated as detailed below.
   python3 reproduction/plot_figure9_phase_diagram_L8.py --out-dir figures --export-paper
   ```
 - **Output**: `figures/phasediagram_L8.pdf` and `paper/figuras/phasediagram_L8.pdf`.
+
+---
+
+## Simulation Data Regeneration Suite (CPU, GPU, SLURM)
+
+In addition to plotting from pre-computed reference datasets, dedicated scripts are provided in `scripts/` to regenerate the raw simulation data for each figure from scratch. Every script supports **local execution** (CPU or GPU) and **SLURM cluster submission** using the **`gpu`** or **`knl_tacc`** partitions.
+
+### Standardized Defaults
+- **Random Initial Perturbation**: Standardized to `eps = 0.0005` across all simulations (customizable via `--eps <val>`).
+- **Default System Sizes**:
+  - Small systems: $L/L_0 = 8.0$, $N = 16$ ($dx = 0.5$).
+  - Phase diagram systems: $L/L_0 = 256.0$, $N = 512$ ($dx = 0.5$).
+  - Extended thermodynamic systems: $L/L_0 = 1024.0$, $N = 2048$ ($dx = 0.5$).
+  - All sizes can be tweaked via `--L <val>` and `--size <val>`.
+
+### Data Regeneration Scripts Map
+
+| Target Figure | Regeneration Script | Primary Executable | Standard System Size |
+|:---:|:---|:---:|:---:|
+| **Figure 1** | [`scripts/generate_fig1_data.sh`](scripts/generate_fig1_data.sh) | `snapshots` | $L=512.0$, $N=1024$ |
+| **Figure 2** | [`scripts/generate_fig2_data.sh`](scripts/generate_fig2_data.sh) | `rigid_wall_sweep_cpu/gpu` | 0D Walker ODE (500 steps) |
+| **Figure 3** | [`scripts/generate_fig3_data.sh`](scripts/generate_fig3_data.sh) | `floquet_sweep_cpu/gpu` | $300 \times 200$ grid |
+| **Figure 4** | [`scripts/generate_fig4_data.sh`](scripts/generate_fig4_data.sh) | `sweep` | $L=8$ ($N=16$) and $L=1024$ ($N=2048$) |
+| **Figure 5** | [`scripts/generate_fig5_data.sh`](scripts/generate_fig5_data.sh) | `sweep` + `floquet` | $L=256.0$, $N=512$ ($100 \times 201$ grid) |
+| **Figure 6** | [`scripts/generate_fig6_data.sh`](scripts/generate_fig6_data.sh) | `time_evo` | $L=1024$ (local) or $L=8192$ (cluster) |
+| **Figure 7** | [`scripts/generate_fig7_data.sh`](scripts/generate_fig7_data.sh) | `snapshots` | $L=512.0$, $N=1024$ ($4\pi/\Omega$ period) |
+| **Figure 8** | [`scripts/generate_fig8_data.sh`](scripts/generate_fig8_data.sh) | `main` | $L \in [1, 262144]$, $N = 2 \times L$ |
+| **Figure 9** | [`scripts/generate_fig9_data.sh`](scripts/generate_fig9_data.sh) | `sweep` + `floquet` | $L=8.0$, $N=16$ ($100 \times 201$ grid) |
+| **All Figures** | [`scripts/generate_all_data.sh`](scripts/generate_all_data.sh) | Master orchestrator | Standardized defaults |
+
+### Usage Examples
+
+```bash
+# 1. Local CPU Execution (OpenMP):
+./scripts/generate_fig4_data.sh --backend cpu
+
+# 2. Local GPU Execution (CUDA):
+./scripts/generate_fig4_data.sh --backend gpu
+
+# 3. Submit to SLURM cluster on 'gpu' partition:
+./scripts/generate_fig4_data.sh --slurm --partition gpu
+# (or directly via sbatch: sbatch --partition=gpu scripts/generate_fig4_data.sh)
+
+# 4. Submit to SLURM cluster on 'knl_tacc' CPU partition:
+./scripts/generate_fig4_data.sh --slurm --partition knl_tacc
+# (or directly via sbatch: sbatch --partition=knl_tacc scripts/generate_fig4_data.sh)
+
+# 5. Parameter Tweaking (e.g. override eps, h0, ha, size):
+./scripts/generate_fig4_data.sh --backend cpu --eps 0.001 --num-h0 100 --ha 3.0
+
+# 6. Master Generation across multiple figures:
+./scripts/generate_all_data.sh --backend cpu --figures 2 3 4
+```
 
 ---
 

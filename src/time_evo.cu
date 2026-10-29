@@ -305,7 +305,7 @@ int main(int argc, char** argv) {
     int max_power = std::stoi(argv[8]);
     std::string output_prefix = argv[9];
 
-    double eps = (argc > 10) ? std::stod(argv[10]) : 0.05;
+    double eps = (argc > 10) ? std::stod(argv[10]) : 0.0005;
     unsigned int seed = (argc > 11) ? std::stoul(argv[11]) : 42;
     std::string backend = (argc > 12) ? argv[12] : "gpu";
 

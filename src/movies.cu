@@ -204,7 +204,7 @@ int main(int argc, char** argv) {
     unsigned long long movie_rate = std::stoull(argv[13]);
     std::string output_prefix = argv[14];
 
-    double eps = (argc > 15) ? std::stod(argv[15]) : 0.05;
+    double eps = (argc > 15) ? std::stod(argv[15]) : 0.0005;
     unsigned int seed = (argc > 16) ? std::stoul(argv[16]) : 42;
     std::string backend = (argc > 17) ? argv[17] : "gpu";
 

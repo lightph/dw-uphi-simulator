@@ -452,7 +452,7 @@ int main(int argc, char** argv) {
     int num_sq_checkpoints = std::stoi(argv[12]);
     std::string output_prefix = argv[13];
 
-    double eps = (argc > 14) ? std::stod(argv[14]) : 0.05;
+    double eps = (argc > 14) ? std::stod(argv[14]) : 0.0005;
     unsigned int seed = (argc > 15) ? std::stoul(argv[15]) : 42;
     std::string backend = (argc > 16) ? argv[16] : "gpu";
 

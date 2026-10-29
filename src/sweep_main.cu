@@ -57,8 +57,8 @@ int main(int argc, char** argv) {
     std::string output_file = argv[12];
     std::string backend = (argc > 13) ? argv[13] : "gpu";
 
-    double eps = 0.0005;
-    unsigned int seed = 42;
+    double eps = (argc > 14) ? std::stod(argv[14]) : 0.0005;
+    unsigned int seed = (argc > 15) ? std::stoul(argv[15]) : 42;
 
     if (backend == "cpu") {
         run_sweep<dw::CpuBackend<dw::FftwDoublePrecision>>(

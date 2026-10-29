@@ -138,6 +138,41 @@ target_link_libraries(sat_check PRIVATE dw_core)
 add_executable(time_evo src/time_evo.cu)
 target_link_libraries(time_evo PRIVATE dw_core)
 
+# Modular aliases
+add_executable(pde_main ALIAS main)
+add_executable(pde_time_evo ALIAS time_evo)
+add_executable(pde_sweep ALIAS sweep)
+add_executable(pde_snapshots ALIAS snapshots)
+add_executable(pde_moments ALIAS moments)
+add_executable(pde_movies ALIAS movies)
+add_executable(pde_sat_check ALIAS sat_check)
+
+# ==============================================================================
+# Rigid Wall Module Targets
+# ==============================================================================
+add_executable(rigid_wall_sweep_cpu rigid_wall/src/rigid_wall_sweep_cpu.cpp)
+target_include_directories(rigid_wall_sweep_cpu PRIVATE rigid_wall/include)
+target_link_libraries(rigid_wall_sweep_cpu PRIVATE OpenMP::OpenMP_CXX Threads::Threads)
+
+if(USE_CUDA)
+    add_executable(rigid_wall_sweep_gpu rigid_wall/src/rigid_wall_sweep_gpu.cu)
+    target_include_directories(rigid_wall_sweep_gpu PRIVATE rigid_wall/include)
+    target_link_libraries(rigid_wall_sweep_gpu PRIVATE CUDA::cudart)
+endif()
+
+# ==============================================================================
+# Floquet Stability Module Targets
+# ==============================================================================
+add_executable(floquet_sweep_cpu floquet/src/floquet_sweep_cpu.cpp)
+target_include_directories(floquet_sweep_cpu PRIVATE floquet/include)
+target_link_libraries(floquet_sweep_cpu PRIVATE OpenMP::OpenMP_CXX Threads::Threads)
+
+if(USE_CUDA)
+    add_executable(floquet_sweep_gpu floquet/src/floquet_sweep_gpu.cu)
+    target_include_directories(floquet_sweep_gpu PRIVATE floquet/include)
+    target_link_libraries(floquet_sweep_gpu PRIVATE CUDA::cudart)
+endif()
+
 # If CUDA is disabled, treat .cu files as standard C++ files
 if(NOT USE_CUDA)
     set_source_files_properties(src/main.cu src/moments.cu src/snapshots.cu src/movies.cu src/sweep_main.cu src/saturation_check.cu src/time_evo.cu PROPERTIES LANGUAGE CXX)

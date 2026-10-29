@@ -5,6 +5,11 @@ echo "========================================"
 echo "Compiling project locally (CPU only)..."
 echo "========================================"
 
+export CCACHE_DIR="${TMPDIR:-/tmp}/ccache_${USER}"
+export CCACHE_DISABLE=1
+if [ -z "${CC}" ]; then export CC="/usr/bin/gcc"; fi
+if [ -z "${CXX}" ]; then export CXX="/usr/bin/g++"; fi
+
 BUILD_DIR="build_local"
 mkdir -p "${BUILD_DIR}"
 cd "${BUILD_DIR}"

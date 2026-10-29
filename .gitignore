@@ -8,6 +8,9 @@ build_native/
 output/
 figures/
 saturation_rugosity.txt
+to_integrate/
+test_*
+rigid_wall_results.txt
 
 # Python
 __pycache__/

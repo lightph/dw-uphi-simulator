@@ -790,7 +790,7 @@ We characterize synchronization with the external drive through the quantity $\l
 % which measures the distance of the mean precessional frequency from the nearest integer multiple of $\Omega/2$. Since the nonlinearity depends on $2\phi$, synchronized states lock to frequencies that are integer multiples of $\Omega/2$, for which $\sigma=0$. In numerical calculations, we therefore identify synchronized states using $\sigma<\sigma_{\rm tol}$, where $\sigma_{\rm tol}$ is a small tolerance that determines the numerical precision with which the Shapiro steps are identified.
 
 \aleadd{
-To highlight finite-size effects, we consider a small system with $L/L_0=8$, for which the first nonzero mode is $\kappa=2\pi/8\approx 0.785$, and a large system with $L/L_0=1000$. The latter provides access to the extended-wall regime in which deterministic spatiotemporal chaos occurs under purely DC driving~\cite{pusiol2026deterministic}, whereas the small system is strongly affected by the discrete set of available spatial modes. This comparison allows us to distinguish finite-size effects from the behavior associated with a broad spectrum of flexural modes.
+To highlight finite-size effects, we consider a small system with $L/L_0=8$, for which the first nonzero mode is $\kappa=2\pi/8\approx 0.785$, and a large system with $L/L_0=1024$. The latter provides access to the extended-wall regime in which deterministic spatiotemporal chaos occurs under purely DC driving~\cite{pusiol2026deterministic}, whereas the small system is strongly affected by the discrete set of available spatial modes. This comparison allows us to distinguish finite-size effects from the behavior associated with a broad spectrum of flexural modes.
 
 \alecom{
 Sacaria la fig \ref{fig:wall_metrics}(a), ya que podriamos correlacionar todo con la Fig \ref{fig:sync_stability}(b) pero si ponemos $h_a=3$ en vez de 4 y con rango extendido $0<h<8$.}
@@ -1000,9 +1000,7 @@ of linearly unstable modes.}
 \begin{figure}[hbtp]
     \centering
     \includegraphics[width=\linewidth]{figuras/sc_cascade.pdf}
-    \caption{\luzcom{Propuesta 2 (cascada)\\
-    Snapshots of a section of the DW in the steady-state SC regime ($h_0=4, \, h_\text{a}=3,\, \alpha=0.27$ and $\Omega=1$), taken at evenly spaced intervals over a full period of its motion. 
-    }}
+    \caption{Snapshots of the relative domain-wall displacement $u(x,t)-\langle u\rangle_x$ along a section of the DW in the steady-state synchronized periodic (SP) phase ($h_0=4$, $h_\text{a}=3$, $\alpha=0.27$, and $\Omega=1$), taken at evenly spaced intervals over a full period of the AC drive (as indicated by the oscillation of $\cos(\Omega t)$ on the right).}
     \label{fig:sc_cascade}
 \end{figure}
 
@@ -1013,9 +1011,7 @@ of linearly unstable modes.}
         \put(90, 52){\textbf{(a)}}
         \put(90, 17){\textbf{(b)}}
     \end{overpic}
-    \caption{\luzcom{
-     Finite size analysis of the SC phase. (a) DW rugosity $\langle w^2 \rangle_t$ and (b) wavenumber of the maximum peak in the structure factor $\kappa_\text{peak}$ as a function of $L/L_0$. The long range spatiotemporal order is dominated by the most linearly unstable mode $\kappa^\ast$ (dotted line) of the synchronized phase. For large enough systems, the roughness converges to a constant value independent of system size. For small sizes, the structure factor is dominated by the lowest available mode $2\pi/(L/L_0)$ (dashed line) and the DW is flat due to the lack of modes in the narrow instability band.
-     }}
+    \caption{Finite-size analysis of the synchronized periodic (SP) phase ($h_0=4$, $h_\text{a}=3$). (a) DW steady-state roughness $\langle w^2 \rangle_t$ and (b) wavenumber of the maximum peak in the structure factor $\kappa_\text{peak}$ as a function of $L/L_0$. The long-range spatiotemporal order is dominated by the most linearly unstable mode $\kappa^\ast$ (dotted line) of the synchronized phase. For large enough systems, the roughness converges to a constant value independent of system size. For small sizes, the structure factor is dominated by the lowest available discrete mode $2\pi/(L/L_0)$ (dashed line) and the DW remains flat due to the lack of modes in the narrow instability band.}
     \label{fig:estructuraSCvsL}
 \end{figure}
 
@@ -1090,7 +1086,7 @@ of linearly unstable modes.}
 % \fabriq{Aquí cuando hablamos de los límites de estabilidad lineal, podríamos aclarar que la línea punteada marca el límite inferior (onset) de la región de estabilidad y lo que queda por debajo es inestable.}
 
 
-We are now in a position to discuss the main result of this work: the full dynamical phase diagram in the $(h_0,h_a)$ plane at fixed AC frequency. Figure~\ref{fig:fases} shows five distinct dynamical regimes: pinned flat (PF), synchronized flat (SF), synchronized periodic (SP), non-synchronized flat (NF), and non-synchronized rough (NR). The phase diagram corresponds to $L/L_0=1000$, for which finite-size effects are negligible on the scale considered. Finite-size effects become visible for substantially smaller systems (see Appendix~\ref{ap:finitesizephasediagram}), so we use the $L/L_0=1000$ results as representative of the $L\to\infty$ dynamical phase diagram. Synchronization is identified by $\sigma<0.01$. The continuous and dotted gray lines indicate, respectively, the synchronization boundaries and the linear-stability boundaries of the corresponding synchronized flat rigid-wall solutions. These boundaries provide a reference for the long-time dynamics of the full nonlinear extended-wall equations: the continuous lines delimit the parameter regions where the corresponding rigid-wall solutions are synchronized, while the dotted lines indicate where these synchronized flat solutions become spatially unstable.
+We are now in a position to discuss the main result of this work: the full dynamical phase diagram in the $(h_0,h_a)$ plane at fixed AC frequency. Figure~\ref{fig:fases} shows five distinct dynamical regimes: pinned flat (PF), synchronized flat (SF), synchronized periodic (SP), non-synchronized flat (NF), and non-synchronized rough (NR). The phase diagram corresponds to $L/L_0=256$, for which finite-size effects are negligible on the scale considered. Finite-size effects become visible for substantially smaller systems (see Appendix~\ref{ap:finitesizephasediagram}), so we use the $L/L_0=256$ results as representative of the $L\to\infty$ dynamical phase diagram. Synchronization is identified by $\sigma<0.01$. The continuous and dotted gray lines indicate, respectively, the synchronization boundaries and the linear-stability boundaries of the corresponding synchronized flat rigid-wall solutions. These boundaries provide a reference for the long-time dynamics of the full nonlinear extended-wall equations: the continuous lines delimit the parameter regions where the corresponding rigid-wall solutions are synchronized, while the dotted lines indicate where these synchronized flat solutions become spatially unstable.
 
 
 In the PF phase, $\langle\dot{\phi}\rangle=0$, so the DW does not exhibit average internal precession, although its mean position $\langle u\rangle$ can still evolve in time. The effective Walker breakdown field in presence of AC drive follows $h_W \approx |J_0(\alpha h_a/\Omega)|$, as predicted by the equality in Eq.\eqref{eq:walkerwithAC} for the particular $n=0$ case. The remaining four regimes combine temporal synchronization with distinct spatial structures. The SF and SP phases are synchronized, whereas NF and NR are non-synchronized. Spatially, SF and NF remain essentially flat, while SP develops a periodic corrugation and NR exhibits roughening. 
@@ -1135,7 +1131,7 @@ w^2 \propto t^{1/2}.
 \end{equation}
 These scaling properties are consistent with the one-dimensional Edwards--Wilkinson universality class, where $w^2 \sim t^{2\zeta/z}$ and $S(q)\sim q^{-(1+2\zeta)}F(q t^{1/z})$, with a roughness exponent $\zeta=1/2$ and dynamic exponent $z=2$. The NR phase under DC+AC drive is thus in the same the universality class as in the purely DC-driven case \cite{pusiol2026deterministic}.
 
-We next turn to the SP regime. Figure~\ref{fig:sc_cascade} shows representative configurations over two periods of the AC drive. The wall develops a periodic corrugation whose amplitude oscillates in time, while the spatial profile recurs periodically. The roughness approaches a finite value as the system size increases, and the dominant wave number remains finite, indicating that the corrugation is not a finite-size artifact. 
+We next turn to the SP regime. Figure~\ref{fig:sc_cascade} shows representative configurations over one period of the AC drive. The wall develops a periodic corrugation whose amplitude oscillates in time, while the spatial profile recurs periodically. The roughness approaches a finite value as the system size increases, and the dominant wave number remains finite, indicating that the corrugation is not a finite-size artifact. 
 
 The spatial periodicity of the SP phase is directly related to the Floquet instability of the synchronized flat state. In the unstable region, a finite band of wave numbers has Floquet multipliers larger than unity, with a maximum growth rate at a characteristic wave number $\kappa^*$. The nonlinear SP state is dominated by a wave number $\kappa_{\rm peak}$ that approaches a finite value with increasing system size and is consistent with the Floquet-selected $\kappa^*$ (indicated by the dashed horizontal line). Figure~\ref{fig:estructuraSCvsL} shows that both the roughness and $\kappa_{\rm peak}$ converge as $L$ increases. For sufficiently small systems, the allowed wave numbers may not sample the unstable band adequately; in that case the wall can remain effectively flat even when the corresponding continuum system is spatially unstable.
 
@@ -1179,7 +1175,7 @@ We thank T. Giamarchi for discussions. Simulations used the Gerencia de Física 
 
 We work out the conversion of our nondimensional model into physical units for the case of a standard Co/Pt multilayer, with parameters~\cite{skaugen2019} $\alpha=0.27$, $A_\text{ex}=1.4 \times 10^{-11}$~J/m, $M_\text{s}=9.1\times 10^5$~A/m, $K_\text{u}=8.4\times 10 ^5$~J/m$^3$ and $N_\text{n}=0.016$.
 
-The length scales for this material are $\Delta\approx6.6$~nm and $L_0\approx8.77\Delta\approx58.0$~nm. This means that the values of $L/L_0$ of 7, 1000, and $10\,000$ in units of $L_0$ used throughout our work correspond to DWs of lengths 406~nm, $58.0$~$\mu$m, and $580$~$\mu$m, respectively. The limiting thermodynamic behavior begins to occur for lengths of order $100\, L_0\approx5.8$~$\mu$m.
+The length scales for this material are $\Delta\approx6.6$~nm and $L_0\approx8.77\Delta\approx58.0$~nm. This means that representative values of $L/L_0$ such as 8, 256, and 1024 used throughout our work correspond to DW lengths of $\approx 464$~nm, $14.8$~$\mu$m, and $59.4$~$\mu$m, respectively ($L/L_0 = 1000$ corresponds to $58.0$~$\mu$m, while the finite-size scaling in Fig.~\ref{fig:estructuraSCvsL} extends up to $L/L_0 \approx 2.6\times 10^5 \approx 15$~mm). The limiting thermodynamic behavior begins to occur for lengths of order $100\, L_0\approx5.8$~$\mu$m.
 
 The time unit in this system is $T_0 \approx0.33$~ns, which corresponds to a frequency unit of $3.03$~GHz. The angular frequency $\Omega=1$ used in this work corresponds to a real frequency of 480~MHz. The wavelength corresponding to this frequency is $0.6$~m, many orders of magnitude above both length scales of the system. 
 

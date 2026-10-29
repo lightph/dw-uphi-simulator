@@ -37,14 +37,14 @@ paper/
 
 | Figure # | File in `figuras/` | Label in `main.tex` | Source / Generation Script |
 |---|---|---|---|
-| **Fig. 1** | `snap_system_345.pdf` | `fig:ej_walker` | Schematic of DW coordinate system $u(x,t)$ and $\phi(x,t)$ |
-| **Fig. 2** | `figure2.pdf` | `fig:shapiro_steps` | Rigid wall velocities and Shapiro synchronization steps |
-| **Fig. 3** | `figure3.pdf` | `fig:floquet_multiplier` | Linear Floquet stability diagrams for $h_\mathrm{a}=2$ and $h_\mathrm{a}=3$ |
+| **Fig. 1** | `snap_system_345.pdf` | `fig:snap` | Schematic of DW coordinate system $u(x,t)$ and $\phi(x,t)$ |
+| **Fig. 2** | `figure2.pdf` | `fig:ej_walker` | Rigid wall velocities and Shapiro synchronization steps |
+| **Fig. 3** | `figure3.pdf` | `fig:sync_stability` | Linear Floquet stability diagrams for $h_\mathrm{a}=2$ and $h_\mathrm{a}=3$ |
 | **Fig. 4** | `sweep_ha_3.pdf` | `fig:wall_metrics` | `python/plot_figure4_wall_metrics.py` |
 | **Fig. 5** | `phasediagram_L256.pdf` | `fig:fases` | `python/plot_prb_publication.py --export-paper` |
 | **Fig. 6** | `NC_EW_inset.pdf` | `fig:estructura` | `python/plot_figure6_nc_ew.py` |
-| **Fig. 7** | `sc_cascade.pdf` | `fig:SC_cascade` | `python/plot_scaling.py` |
-| **Fig. 8** | `SC_scaling.pdf` | `fig:SC_scaling` | `python/plot_figure8_sc_scaling.py` |
+| **Fig. 7** | `sc_cascade.pdf` | `fig:sc_cascade` | `python/plot_scaling.py` |
+| **Fig. 8** | `SC_scaling.pdf` | `fig:estructuraSCvsL` | `python/plot_figure8_sc_scaling.py` |
 | **Fig. 9** | `phasediagram_L8.pdf` | `fig:phasediagram_smallL` | `python/plot_prb_publication.py --export-paper` |
 
 *Note: Exploratory figure variations, side-by-side versions, and comparison plots are stored in the project-level `figures/` directory.*

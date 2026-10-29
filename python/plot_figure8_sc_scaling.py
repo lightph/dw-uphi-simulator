@@ -216,6 +216,10 @@ def main():
                         help="Path to scaling data directory (default: output/scaling_data)")
     parser.add_argument("--cluster-dir", default="/mnt/cluster/inv1/proyecto-v2/output/scaling",
                         help="Optional fallback to cluster directory")
+    parser.add_argument("--out-dir", default="figures",
+                        help="Output directory (default: figures)")
+    parser.add_argument("--export-paper", action="store_true",
+                        help="Also export to paper/figuras/")
     args = parser.parse_args()
     
     data_dir = args.data_dir
@@ -229,20 +233,27 @@ def main():
     # Load initial dataset (Aug 24, single run)
     aug_data = load_dataset(data_dir, suffix='')
     
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
     # 1. Primary PRB Figure (Sep 9 data with 10^-7 floor for flat state)
-    plot_figure8(sep_data, "paper/figuras/SC_scaling.pdf", clip_floor=1e-7)
-    # Also save copy to figures/
-    plot_figure8(sep_data, "figures/SC_scaling.pdf", "figures/SC_scaling.png", clip_floor=1e-7)
+    plot_figure8(sep_data, str(out_dir / "SC_scaling.pdf"), str(out_dir / "SC_scaling.png"), clip_floor=1e-7)
+
+    if args.export_paper:
+        paper_dest = Path("paper/figuras/SC_scaling.pdf")
+        paper_dest.parent.mkdir(parents=True, exist_ok=True)
+        plot_figure8(sep_data, str(paper_dest), clip_floor=1e-7)
+        print(f"Exported to paper figures: {paper_dest}")
     
-    # 2. Variants for comparison saved to figures/:
+    # 2. Variants for comparison saved to out_dir:
     # 2a. Open markers at floor
-    plot_figure8(sep_data, "figures/SC_scaling_open_markers.pdf", "figures/SC_scaling_open_markers.png",
+    plot_figure8(sep_data, str(out_dir / "SC_scaling_open_markers.pdf"), str(out_dir / "SC_scaling_open_markers.png"),
                  clip_floor=1e-7, open_floor_markers=True)
     # 2b. Strictly positive / unclipped
-    plot_figure8(sep_data, "figures/SC_scaling_no_floor.pdf", "figures/SC_scaling_no_floor.png",
+    plot_figure8(sep_data, str(out_dir / "SC_scaling_no_floor.pdf"), str(out_dir / "SC_scaling_no_floor.png"),
                  clip_floor=None)
     # 2c. Original Aug 24 dataset with Ale's corrections
-    plot_figure8(aug_data, "figures/SC_scaling_aug.pdf", "figures/SC_scaling_aug.png",
+    plot_figure8(aug_data, str(out_dir / "SC_scaling_aug.pdf"), str(out_dir / "SC_scaling_aug.png"),
                  clip_floor=None)
                  
     print("Done generating all Figure 8 variants!")

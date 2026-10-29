@@ -30,7 +30,7 @@ if 'MPLCONFIGDIR' not in os.environ:
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.colors import LogNorm, ListedColormap, TwoSlopeNorm
+from matplotlib.colors import LogNorm, ListedColormap, TwoSlopeNorm, Normalize
 import matplotlib.ticker as ticker
 import matplotlib.patheffects as pe
 
@@ -540,7 +540,14 @@ def main():
     # =========================================================================
     vu_grid = get_grid(data['v_u'])
     fig4, ax4 = plt.subplots(figsize=(4.8, 3.8))
-    norm_vu = TwoSlopeNorm(vmin=np.nanmin(vu_grid), vcenter=0.0, vmax=np.nanmax(vu_grid))
+    vmin_u = float(np.nanmin(vu_grid))
+    vmax_u = float(np.nanmax(vu_grid))
+    if vmin_u < 0.0 < vmax_u:
+        norm_vu = TwoSlopeNorm(vmin=vmin_u, vcenter=0.0, vmax=vmax_u)
+    elif vmin_u >= 0.0:
+        norm_vu = Normalize(vmin=0.0, vmax=max(vmax_u, 1e-6))
+    else:
+        norm_vu = Normalize(vmin=min(vmin_u, -1e-6), vmax=0.0)
     mesh4 = ax4.pcolormesh(X, Y, vu_grid, cmap='coolwarm', norm=norm_vu, shading='nearest', rasterized=True)
     cbar4 = fig4.colorbar(mesh4, ax=ax4, pad=0.03)
     cbar4.set_label(r'$\langle \dot{u} \rangle_t$', fontsize=13)

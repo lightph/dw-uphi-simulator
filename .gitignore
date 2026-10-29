@@ -7,7 +7,6 @@ build_native/
 #output and figures
 output/
 figures/
-paper/
 saturation_rugosity.txt
 
 # Python

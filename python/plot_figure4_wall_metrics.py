@@ -318,9 +318,8 @@ if __name__ == "__main__":
     out_with_legend = os.path.join(args.out_dir, "sweep_ha_3.003_with_legend.pdf")
     plot_figure_4(args.data_dir, out_with_legend, include_legend=True)
     
-    # 3. Also update paper/figuras/sweep_ha_3.003.pdf (defaulting to caption-only / clean)
-    plot_figure_4(args.data_dir, "paper/figuras/sweep_ha_3.003.pdf", include_legend=False)
-    plot_figure_4(args.data_dir, "paper/figuras/sweep_ha_3.003_with_legend.pdf", include_legend=True)
+    # 3. Also update paper/figuras/sweep_ha_3.pdf (caption-only / clean, matching paper/main.tex)
+    plot_figure_4(args.data_dir, "paper/figuras/sweep_ha_3.pdf", include_legend=False)
     
     # 4. Also copy to output/sweep_ha3_L8_L1024_979329/figures
     plot_figure_4(args.data_dir, "output/sweep_ha3_L8_L1024_979329/figures/figure4_caption_only.pdf", include_legend=False)

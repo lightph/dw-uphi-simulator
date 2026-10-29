@@ -1,0 +1,31 @@
+\documentclass[aps,prb,onecolumn,superscriptaddress]{revtex4-2}
+\usepackage{amsmath,amssymb,graphicx,bm}
+\usepackage{underscore}
+\usepackage{color}
+\usepackage[colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue]{hyperref}
+%\usepackage{bibunits}  % For separate SI references
+
+\renewcommand{\thefigure}{S\arabic{figure}}
+\renewcommand{\thetable}{S\arabic{table}}
+\renewcommand{\theequation}{S\arabic{equation}}
+
+\makeatletter
+\renewcommand{\@biblabel}[1]{[S#1]}
+\makeatother
+
+% \usepackage[labelformat=empty, justification=raggedright]{caption}
+
+\begin{document}
+% \begin{bibunit}[apsrev4-2]  % Start a separate reference unit for SI
+
+\title{Supplemental Material for: \\ \textit{Deterministic Roughening in the DC-Driven Precessional Regime of Domain Walls}}
+\maketitle
+\section{Movies}
+
+\begin{itemize}
+\item \textbf{Movie S1} (\texttt{movie\_StabilityMapVsGilbertDamping.mp4}) illustrates how the spectral stability map evolves as a function of the Gilbert damping parameter $\alpha$. In each frame, color indicates the magnitude of the largest Floquet multiplier for each mode at a given field value.
+\item \textbf{Movie S2} (\texttt{movie\_BlochLineDynamics.mp4}) shows the space-time trajectories of vertical Bloch lines within a segment of a domain wall embedded in a larger DW structure. The colorbar represents the instantaneous angle $\phi(x,t)$, with Bloch lines appearing as kinks that generate the spatiotemporal pattern.
+\item \textbf{Movie S3} (\texttt{movie\_DWBlochLinesCorrugationLLG.mp4}) 
+Emergence of corrugations and Bloch lines in the transient domain-wall dynamics, starting from a slightly perturbed flat initial condition, obtained from LLG numerical simulations.
+\end{itemize}
+\end{document}

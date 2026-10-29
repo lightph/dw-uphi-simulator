@@ -30,7 +30,7 @@ if 'MPLCONFIGDIR' not in os.environ:
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.colors import LogNorm, ListedColormap
+from matplotlib.colors import LogNorm, ListedColormap, TwoSlopeNorm
 import matplotlib.ticker as ticker
 import matplotlib.patheffects as pe
 
@@ -168,23 +168,7 @@ def add_floquet_contours(ax, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=0.65):
     ax.contour(H_GRID, HAC_GRID, mu_grid, levels=[1.0001], colors=['#000000'],
                linestyles=['dashed'], linewidths=[lw])
 
-# ==============================================================================
-# ANALYZED POINTS OVERLAY
-# ==============================================================================
-ANALYZED_POINTS = [
-    {'h0': 3.70, 'ha': 3.00, 'label': '1'},
-    {'h0': 3.50, 'ha': 3.00, 'label': '2'},
-    {'h0': 3.80, 'ha': 2.10, 'label': '3'},
-    {'h0': 3.15, 'ha': 7.30, 'label': '4'},
-    {'h0': 3.45, 'ha': 3.675, 'label': '5'}
-]
 
-def add_analyzed_markers(ax, points=ANALYZED_POINTS, markersize=8, mew=1.8):
-    """Marks analyzed parameter cases with high-contrast, halo-outlined 'x' markers."""
-    for p in points:
-        ax.plot(p['h0'], p['ha'], marker='x', markersize=markersize, mew=mew, color='#ffffff',
-                path_effects=[pe.Stroke(linewidth=mew + 1.8, foreground='#000000'), pe.Normal()],
-                zorder=25)
 
 # ==============================================================================
 # 2D DESPANGLING / MAJORITY FILTER (Solid blocks of phases)
@@ -216,6 +200,19 @@ def clean_grainy_grid(grid, iterations=2):
 # ==============================================================================
 # DC CRITICAL FIELD AUTO-DETECTION (Fabri's Suggestion)
 # ==============================================================================
+def detect_system_length(data_dir):
+    """Detects system length L from run_parameters.txt."""
+    param_file = os.path.join(data_dir, "run_parameters.txt")
+    if os.path.exists(param_file):
+        with open(param_file, "r") as fp:
+            for line in fp:
+                if "Length (L):" in line:
+                    try:
+                        return float(line.split(":")[-1].strip())
+                    except ValueError:
+                        pass
+    return None
+
 def detect_hc(clean_phase_grid, u_h0, default_hc=3.825):
     """
     Detects critical field hc under purely DC drive (ha = 0).
@@ -237,11 +234,11 @@ def detect_hc(clean_phase_grid, u_h0, default_hc=3.825):
 def create_phase_diagram_figure(X, Y, clean_phase_grid, phase_cmap, phase_patches,
                                 has_floquet=False, H_GRID=None, HAC_GRID=None,
                                 conv_grid=None, mu_grid=None, line_width=0.65,
-                                hc=3.825, with_dc_strip=True, analyzed_points=None):
+                                hc=3.825, with_dc_strip=True):
     """
     Constructs the PRB publication phase diagram figure.
     If with_dc_strip is True (Fabri's suggestion):
-      - Top axes: 2D (h0, ha) phase diagram with Floquet contours and optional markers.
+      - Top axes: 2D (h0, ha) phase diagram with Floquet contours.
       - Bottom axes: 1D horizontal strip showing purely DC phases (ha = 0):
           * P (non-precessional) for 0 <= h0 <= 1.0
           * NR (precessional rough) for 1.0 < h0 < hc
@@ -262,8 +259,6 @@ def create_phase_diagram_figure(X, Y, clean_phase_grid, phase_cmap, phase_patche
                        shading='nearest', rasterized=True)
     if has_floquet:
         add_floquet_contours(ax_main, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=line_width)
-    if analyzed_points is not None:
-        add_analyzed_markers(ax_main, analyzed_points)
 
     ax_main.set_xlim(0, 10)
     ax_main.set_ylim(0, 20)
@@ -324,6 +319,10 @@ def main():
                         help="DPI for raster PNG output (default: 300)")
     parser.add_argument("--line-width", "--lw", type=float, default=0.65,
                         help="Line width for boundary contours (default: 0.65)")
+    parser.add_argument("--rug-vmax", type=float, default=None,
+                        help="Maximum value for rugosity colorbar (default: auto)")
+    parser.add_argument("--vphi-vmax", type=float, default=None,
+                        help="Maximum value for v_phi colorbar (default: auto)")
     parser.add_argument("--hc", type=float, default=None,
                         help="Critical field hc separating NR from NF in DC strip (default: auto-detect from ha=0 data)")
     parser.add_argument("--no-floquet", action="store_true",
@@ -407,8 +406,14 @@ def main():
         else:
             print()
 
-    # Clean up obsolete 3-panel files if present
-    for old_file in ["prb_sweep_3panel.png", "prb_sweep_3panel.pdf"]:
+    # Clean up obsolete marker / variant files if present
+    for old_file in [
+        "prb_sweep_3panel.png", "prb_sweep_3panel.pdf",
+        "prb_phase_diagram_points.png", "prb_phase_diagram_points.pdf",
+        "prb_velocity_u_clean.png", "prb_velocity_u_clean.pdf",
+        "prb_velocity_phi_clean.png", "prb_velocity_phi_clean.pdf",
+        "prb_phase_and_velocities_analyzed.png", "prb_phase_and_velocities_analyzed.pdf"
+    ]:
         old_path = os.path.join(args.out_dir, old_file)
         if os.path.exists(old_path):
             os.remove(old_path)
@@ -417,12 +422,24 @@ def main():
     # FIGURE 1: RUGOSITY <w^2>_t
     # =========================================================================
     rug_grid = get_grid(data['rugosity'])
+    max_rug = np.nanmax(rug_grid)
+    if args.rug_vmax is not None:
+        vmax_rug = args.rug_vmax
+    elif max_rug > 10.0:
+        vmax_rug = 10.0 ** np.ceil(np.log10(max_rug))
+    else:
+        vmax_rug = 1.0
+
+    ticks_rug = [1e-15, 1e-12, 1e-9, 1e-6, 1e-3, 1e0]
+    if vmax_rug >= 1e3:
+        ticks_rug.append(vmax_rug)
+
     fig, ax = plt.subplots(figsize=(4.8, 3.8))
     mesh = ax.pcolormesh(X, Y, np.clip(rug_grid, 1e-15, None), cmap='inferno',
-                         norm=LogNorm(vmin=1e-15, vmax=1.0), shading='nearest', rasterized=True)
+                         norm=LogNorm(vmin=1e-15, vmax=vmax_rug), shading='nearest', rasterized=True)
     cbar = fig.colorbar(mesh, ax=ax, pad=0.03)
     cbar.set_label(r'$\langle w^2 \rangle_t$', fontsize=13)
-    cbar.set_ticks([1e-15, 1e-12, 1e-9, 1e-6, 1e-3, 1e0])
+    cbar.set_ticks(ticks_rug)
     cbar.ax.tick_params(direction='in', which='both')
 
     if has_floquet:
@@ -444,6 +461,28 @@ def main():
     if not args.quiet:
         print(f"Generated: {f1_png} and {f1_pdf}")
 
+    # If large system rugosity scale was expanded, also generate vmax=1.0 version for direct comparison
+    if vmax_rug > 1.0:
+        fig, ax = plt.subplots(figsize=(4.8, 3.8))
+        mesh = ax.pcolormesh(X, Y, np.clip(rug_grid, 1e-15, None), cmap='inferno',
+                             norm=LogNorm(vmin=1e-15, vmax=1.0), shading='nearest', rasterized=True)
+        cbar = fig.colorbar(mesh, ax=ax, pad=0.03)
+        cbar.set_label(r'$\langle w^2 \rangle_t$', fontsize=13)
+        cbar.set_ticks([1e-15, 1e-12, 1e-9, 1e-6, 1e-3, 1e0])
+        cbar.ax.tick_params(direction='in', which='both')
+        if has_floquet:
+            add_floquet_contours(ax, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
+        ax.set_xlabel(r'$h_0$', fontsize=13)
+        ax.set_ylabel(r'$h_\mathrm{a}$', fontsize=13)
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 20)
+        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+        plt.tight_layout()
+        fig.savefig(os.path.join(args.out_dir, "prb_rugosity_vmax1.png"), dpi=args.dpi)
+        fig.savefig(os.path.join(args.out_dir, "prb_rugosity_vmax1.pdf"))
+        plt.close(fig)
+
     # =========================================================================
     # FIGURE 2: STROBOSCOPIC VARIANCE <\sigma^2>_x
     # =========================================================================
@@ -453,7 +492,7 @@ def main():
                          norm=LogNorm(vmin=1e-15, vmax=10.0), shading='nearest', rasterized=True)
     cbar = fig.colorbar(mesh, ax=ax, pad=0.03)
     cbar.set_label(r'$\langle \sigma^2 \rangle_x$', fontsize=13)
-    cbar.set_ticks([1e-15, 1e-12, 1e-9, 1e-6, 1e-3, 1e0])
+    cbar.set_ticks([1e-15, 1e-12, 1e-9, 1e-6, 1e-3, 1e0, 1e1])
     cbar.ax.tick_params(direction='in', which='both')
 
     if has_floquet:
@@ -486,7 +525,7 @@ def main():
         X, Y, clean_phase_grid, phase_cmap, phase_patches,
         has_floquet=has_floquet, H_GRID=H_GRID, HAC_GRID=HAC_GRID,
         conv_grid=conv_grid, mu_grid=mu_grid, line_width=args.line_width,
-        hc=hc_val, with_dc_strip=with_dc, analyzed_points=None
+        hc=hc_val, with_dc_strip=with_dc
     )
     f3_png = os.path.join(args.out_dir, "prb_phase_diagram.png")
     f3_pdf = os.path.join(args.out_dir, "prb_phase_diagram.pdf")
@@ -497,16 +536,29 @@ def main():
         print(f"Generated: {f3_png} and {f3_pdf}")
 
     # =========================================================================
-    # FIGURE 4: PHASE DIAGRAM WITH ANALYZED POINTS (MARKED WITH 'X')
+    # FIGURE 4: TRANSLATIONAL VELOCITY <\dot{u}>_t (v_u)
     # =========================================================================
-    fig4 = create_phase_diagram_figure(
-        X, Y, clean_phase_grid, phase_cmap, phase_patches,
-        has_floquet=has_floquet, H_GRID=H_GRID, HAC_GRID=HAC_GRID,
-        conv_grid=conv_grid, mu_grid=mu_grid, line_width=args.line_width,
-        hc=hc_val, with_dc_strip=with_dc, analyzed_points=ANALYZED_POINTS
-    )
-    f4_png = os.path.join(args.out_dir, "prb_phase_diagram_points.png")
-    f4_pdf = os.path.join(args.out_dir, "prb_phase_diagram_points.pdf")
+    vu_grid = get_grid(data['v_u'])
+    fig4, ax4 = plt.subplots(figsize=(4.8, 3.8))
+    norm_vu = TwoSlopeNorm(vmin=np.nanmin(vu_grid), vcenter=0.0, vmax=np.nanmax(vu_grid))
+    mesh4 = ax4.pcolormesh(X, Y, vu_grid, cmap='coolwarm', norm=norm_vu, shading='nearest', rasterized=True)
+    cbar4 = fig4.colorbar(mesh4, ax=ax4, pad=0.03)
+    cbar4.set_label(r'$\langle \dot{u} \rangle_t$', fontsize=13)
+    cbar4.ax.tick_params(direction='in', which='both')
+
+    if has_floquet:
+        add_floquet_contours(ax4, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
+
+    ax4.set_xlabel(r'$h_0$', fontsize=13)
+    ax4.set_ylabel(r'$h_\mathrm{a}$', fontsize=13)
+    ax4.set_xlim(0, 10)
+    ax4.set_ylim(0, 20)
+    ax4.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+    ax4.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+
+    plt.tight_layout()
+    f4_png = os.path.join(args.out_dir, "prb_velocity_u.png")
+    f4_pdf = os.path.join(args.out_dir, "prb_velocity_u.pdf")
     fig4.savefig(f4_png, dpi=args.dpi)
     fig4.savefig(f4_pdf)
     plt.close(fig4)
@@ -514,110 +566,82 @@ def main():
         print(f"Generated: {f4_png} and {f4_pdf}")
 
     # =========================================================================
-    # FIGURE 5: TRANSLATIONAL VELOCITY <\dot{u}>_t (v_u)
+    # FIGURE 5: ANGULAR / PHASE VELOCITY <\dot{\phi}>_t (v_phi)
     # =========================================================================
-    vu_grid = get_grid(data['v_u'])
-    fig, ax = plt.subplots(figsize=(4.8, 3.8))
-    mesh = ax.pcolormesh(X, Y, vu_grid, cmap='coolwarm', shading='nearest', rasterized=True)
-    cbar = fig.colorbar(mesh, ax=ax, pad=0.03)
-    cbar.set_label(r'$\langle \dot{u} \rangle_t$', fontsize=13)
-    cbar.ax.tick_params(direction='in', which='both')
+    vphi_grid = get_grid(data['v_phi'])
+    vmax_vphi = args.vphi_vmax if args.vphi_vmax is not None else (1.4 if np.nanmax(vphi_grid) > 1.25 else 1.2)
+
+    fig5, ax5 = plt.subplots(figsize=(4.8, 3.8))
+    mesh5 = ax5.pcolormesh(X, Y, vphi_grid, cmap='viridis', vmin=0.0, vmax=vmax_vphi,
+                           shading='nearest', rasterized=True)
+    cbar5 = fig5.colorbar(mesh5, ax=ax5, pad=0.03)
+    cbar5.set_label(r'$\langle \dot{\phi} \rangle_t$', fontsize=13)
+    cbar5.ax.tick_params(direction='in', which='both')
 
     if has_floquet:
-        add_floquet_contours(ax, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
-    add_analyzed_markers(ax, ANALYZED_POINTS)
+        add_floquet_contours(ax5, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
 
-    ax.set_xlabel(r'$h_0$', fontsize=13)
-    ax.set_ylabel(r'$h_\mathrm{a}$', fontsize=13)
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 20)
-    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+    ax5.set_xlabel(r'$h_0$', fontsize=13)
+    ax5.set_ylabel(r'$h_\mathrm{a}$', fontsize=13)
+    ax5.set_xlim(0, 10)
+    ax5.set_ylim(0, 20)
+    ax5.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+    ax5.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
     plt.tight_layout()
-    f5_png = os.path.join(args.out_dir, "prb_velocity_u.png")
-    f5_pdf = os.path.join(args.out_dir, "prb_velocity_u.pdf")
-    fig.savefig(f5_png, dpi=args.dpi)
-    fig.savefig(f5_pdf)
-    plt.close(fig)
+    f5_png = os.path.join(args.out_dir, "prb_velocity_phi.png")
+    f5_pdf = os.path.join(args.out_dir, "prb_velocity_phi.pdf")
+    fig5.savefig(f5_png, dpi=args.dpi)
+    fig5.savefig(f5_pdf)
+    plt.close(fig5)
     if not args.quiet:
         print(f"Generated: {f5_png} and {f5_pdf}")
 
     # =========================================================================
-    # FIGURE 6: ANGULAR / PHASE VELOCITY <\dot{\phi}>_t (v_phi)
+    # FIGURE 6: COMPOSITE PHASE DIAGRAM & VELOCITIES (CLEAN, NO PANEL LABELS)
     # =========================================================================
-    vphi_grid = get_grid(data['v_phi'])
-    fig, ax = plt.subplots(figsize=(4.8, 3.8))
-    mesh = ax.pcolormesh(X, Y, vphi_grid, cmap='viridis', vmin=0.0, vmax=1.2,
-                         shading='nearest', rasterized=True)
-    cbar = fig.colorbar(mesh, ax=ax, pad=0.03)
-    cbar.set_label(r'$\langle \dot{\phi} \rangle_t$', fontsize=13)
-    cbar.ax.tick_params(direction='in', which='both')
+    fig_comp, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14.2, 4.0))
 
-    if has_floquet:
-        add_floquet_contours(ax, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
-    add_analyzed_markers(ax, ANALYZED_POINTS)
-
-    ax.set_xlabel(r'$h_0$', fontsize=13)
-    ax.set_ylabel(r'$h_\mathrm{a}$', fontsize=13)
-    ax.set_xlim(0, 10)
-    ax.set_ylim(0, 20)
-    ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-    ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-
-    plt.tight_layout()
-    f6_png = os.path.join(args.out_dir, "prb_velocity_phi.png")
-    f6_pdf = os.path.join(args.out_dir, "prb_velocity_phi.pdf")
-    fig.savefig(f6_png, dpi=args.dpi)
-    fig.savefig(f6_pdf)
-    plt.close(fig)
-    if not args.quiet:
-        print(f"Generated: {f6_png} and {f6_pdf}")
-
-    # =========================================================================
-    # FIGURE 7: COMPOSITE PHASE DIAGRAM & VELOCITIES WITH ANALYZED POINTS
-    # =========================================================================
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14.2, 4.0))
-
-    # (a) Phase Diagram
-    m1 = ax1.pcolormesh(X, Y, clean_phase_grid, cmap=phase_cmap, vmin=-0.5, vmax=4.5,
-                        shading='nearest', rasterized=True)
+    # Phase Diagram
+    ax1.pcolormesh(X, Y, clean_phase_grid, cmap=phase_cmap, vmin=-0.5, vmax=4.5,
+                   shading='nearest', rasterized=True)
     if has_floquet:
         add_floquet_contours(ax1, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
-    add_analyzed_markers(ax1, ANALYZED_POINTS)
+    ax1.set_title(r'Phase Diagram', fontsize=12)
     ax1.set_xlabel(r'$h_0$', fontsize=12)
     ax1.set_ylabel(r'$h_\mathrm{a}$', fontsize=12)
-    ax1.set_title(r'(a) Phase Diagram', fontsize=12)
     ax1.set_xlim(0, 10)
     ax1.set_ylim(0, 20)
-    ax1.legend(handles=phase_patches, loc='lower center', bbox_to_anchor=(0.5, 1.05),
-               ncol=5, frameon=True, framealpha=1.0, edgecolor='none',
-               handlelength=1.1, handletextpad=0.3, columnspacing=0.8, fontsize=9.5)
 
-    # (b) Velocity u
-    m2 = ax2.pcolormesh(X, Y, vu_grid, cmap='coolwarm', shading='nearest', rasterized=True)
-    cb2 = fig.colorbar(m2, ax=ax2, pad=0.03)
+    # Velocity u
+    m2 = ax2.pcolormesh(X, Y, vu_grid, cmap='coolwarm', norm=norm_vu, shading='nearest', rasterized=True)
+    cb2 = fig_comp.colorbar(m2, ax=ax2, pad=0.03)
     cb2.set_label(r'$\langle \dot{u} \rangle_t$', fontsize=12)
+    cb2.ax.tick_params(direction='in', which='both')
     if has_floquet:
         add_floquet_contours(ax2, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
-    add_analyzed_markers(ax2, ANALYZED_POINTS)
+    ax2.set_title(r'Translational Velocity $\langle \dot{u} \rangle_t$', fontsize=12)
     ax2.set_xlabel(r'$h_0$', fontsize=12)
     ax2.set_ylabel(r'$h_\mathrm{a}$', fontsize=12)
-    ax2.set_title(r'(b) Velocity $\langle \dot{u} \rangle_t$', fontsize=12)
     ax2.set_xlim(0, 10)
     ax2.set_ylim(0, 20)
 
-    # (c) Velocity phi
-    m3 = ax3.pcolormesh(X, Y, vphi_grid, cmap='viridis', vmin=0.0, vmax=1.2,
+    # Legend centered above middle plot
+    ax2.legend(handles=phase_patches, loc='lower center', bbox_to_anchor=(0.5, 1.08),
+               ncol=5, frameon=True, framealpha=1.0, edgecolor='none',
+               handlelength=1.1, handletextpad=0.3, columnspacing=0.8, fontsize=9.5)
+
+    # Velocity phi
+    m3 = ax3.pcolormesh(X, Y, vphi_grid, cmap='viridis', vmin=0.0, vmax=vmax_vphi,
                         shading='nearest', rasterized=True)
-    cb3 = fig.colorbar(m3, ax=ax3, pad=0.03)
+    cb3 = fig_comp.colorbar(m3, ax=ax3, pad=0.03)
     cb3.set_label(r'$\langle \dot{\phi} \rangle_t$', fontsize=12)
+    cb3.ax.tick_params(direction='in', which='both')
     if has_floquet:
         add_floquet_contours(ax3, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
-    add_analyzed_markers(ax3, ANALYZED_POINTS)
+    ax3.set_title(r'Precessional Velocity $\langle \dot{\phi} \rangle_t$', fontsize=12)
     ax3.set_xlabel(r'$h_0$', fontsize=12)
     ax3.set_ylabel(r'$h_\mathrm{a}$', fontsize=12)
-    ax3.set_title(r'(c) Angular Velocity $\langle \dot{\phi} \rangle_t$', fontsize=12)
     ax3.set_xlim(0, 10)
     ax3.set_ylim(0, 20)
 
@@ -626,30 +650,33 @@ def main():
         ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
     plt.tight_layout()
-    f7_png = os.path.join(args.out_dir, "prb_phase_and_velocities_analyzed.png")
-    f7_pdf = os.path.join(args.out_dir, "prb_phase_and_velocities_analyzed.pdf")
-    fig.savefig(f7_png, dpi=args.dpi)
-    fig.savefig(f7_pdf)
-    plt.close(fig)
+    f6_png = os.path.join(args.out_dir, "prb_phase_and_velocities.png")
+    f6_pdf = os.path.join(args.out_dir, "prb_phase_and_velocities.pdf")
+    fig_comp.savefig(f6_png, dpi=args.dpi)
+    fig_comp.savefig(f6_pdf)
+    plt.close(fig_comp)
     if not args.quiet:
-        print(f"Generated: {f7_png} and {f7_pdf}")
+        print(f"Generated: {f6_png} and {f6_pdf}")
         print(f"\nAll publication figures successfully created in: {args.out_dir}")
 
     # =========================================================================
-    # OPTIONAL EXPORT TO PAPER FIGURES DIRECTORY
+    # OPTIONAL EXPORT TO PAPER FIGURES DIRECTORY (SEPARATE SIZES, NEVER TOGETHER)
     # =========================================================================
     if args.export_paper:
         paper_fig_dir = os.path.join("paper", "figuras")
         if os.path.isdir(paper_fig_dir):
             import shutil
-            target_pdf = os.path.join(paper_fig_dir, "phasediagram_L8.pdf")
-            target_png = os.path.join(paper_fig_dir, "phasediagram_L8.png")
-            shutil.copyfile(f3_pdf, target_pdf)
-            shutil.copyfile(f3_png, target_png)
-            # Update smallL.png for compatibility
-            shutil.copyfile(f3_png, os.path.join(paper_fig_dir, "smallL.png"))
-            if not args.quiet:
-                print(f"Exported publication phase diagram to {target_pdf} and {target_png}")
+            L_val = detect_system_length(args.data_dir)
+            if L_val is not None and L_val > 16:
+                target_pdf = os.path.join(paper_fig_dir, f"phasediagram_L{int(L_val)}.pdf")
+                shutil.copyfile(f3_pdf, target_pdf)
+                if not args.quiet:
+                    print(f"Exported publication phase diagram to {target_pdf}")
+            else:
+                target_pdf = os.path.join(paper_fig_dir, "phasediagram_L8.pdf")
+                shutil.copyfile(f3_pdf, target_pdf)
+                if not args.quiet:
+                    print(f"Exported publication phase diagram to {target_pdf}")
 
 if __name__ == "__main__":
     main()

@@ -632,28 +632,30 @@ def generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", lay
     base_name = f"NC_EW{suffix}"
 
     if do_all or layout == "inset":
-        out_pdf = paper_fig_dir / f"{base_name}.pdf"
+        out_pdf = figures_dir / f"{base_name}_inset.pdf"
         out_png = figures_dir / f"{base_name}.png"
         make_variant_inset(spectra, t_w2, w2, out_pdf, out_png)
-        shutil.copy2(out_pdf, paper_fig_dir / f"{base_name}_inset.pdf")
+        shutil.copy2(out_pdf, figures_dir / f"{base_name}.pdf")
+        if suffix == "":
+            shutil.copy2(out_pdf, paper_fig_dir / "NC_EW_inset.pdf")
 
     if do_all or layout == "side_by_side":
-        out_pdf = paper_fig_dir / f"{base_name}_side_by_side.pdf"
+        out_pdf = figures_dir / f"{base_name}_side_by_side.pdf"
         out_png = figures_dir / f"{base_name}_side_by_side.png"
         make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png)
 
     if do_all or layout == "stacked":
-        out_pdf = paper_fig_dir / f"{base_name}_stacked.pdf"
+        out_pdf = figures_dir / f"{base_name}_stacked.pdf"
         out_png = figures_dir / f"{base_name}_stacked.png"
         make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png)
 
     if do_all or layout == "compensated":
-        out_pdf = paper_fig_dir / f"{base_name}_compensated.pdf"
+        out_pdf = figures_dir / f"{base_name}_compensated.pdf"
         out_png = figures_dir / f"{base_name}_compensated.png"
         make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png)
 
     if do_all or layout == "wide_row":
-        out_pdf = paper_fig_dir / f"{base_name}_wide_row.pdf"
+        out_pdf = figures_dir / f"{base_name}_wide_row.pdf"
         out_png = figures_dir / f"{base_name}_wide_row.png"
         make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png)
 

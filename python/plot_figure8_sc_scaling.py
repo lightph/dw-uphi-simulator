@@ -230,19 +230,19 @@ def main():
     aug_data = load_dataset(data_dir, suffix='')
     
     # 1. Primary PRB Figure (Sep 9 data with 10^-7 floor for flat state)
-    plot_figure8(sep_data, "paper/figuras/SC_scaling.pdf", "paper/figuras/SC_scaling.png", clip_floor=1e-7)
+    plot_figure8(sep_data, "paper/figuras/SC_scaling.pdf", clip_floor=1e-7)
     # Also save copy to figures/
     plot_figure8(sep_data, "figures/SC_scaling.pdf", "figures/SC_scaling.png", clip_floor=1e-7)
     
-    # 2. Variants for comparison:
+    # 2. Variants for comparison saved to figures/:
     # 2a. Open markers at floor
-    plot_figure8(sep_data, "paper/figuras/SC_scaling_open_markers.pdf", "paper/figuras/SC_scaling_open_markers.png",
+    plot_figure8(sep_data, "figures/SC_scaling_open_markers.pdf", "figures/SC_scaling_open_markers.png",
                  clip_floor=1e-7, open_floor_markers=True)
     # 2b. Strictly positive / unclipped
-    plot_figure8(sep_data, "paper/figuras/SC_scaling_no_floor.pdf", "paper/figuras/SC_scaling_no_floor.png",
+    plot_figure8(sep_data, "figures/SC_scaling_no_floor.pdf", "figures/SC_scaling_no_floor.png",
                  clip_floor=None)
     # 2c. Original Aug 24 dataset with Ale's corrections
-    plot_figure8(aug_data, "paper/figuras/SC_scaling_aug.pdf", "paper/figuras/SC_scaling_aug.png",
+    plot_figure8(aug_data, "figures/SC_scaling_aug.pdf", "figures/SC_scaling_aug.png",
                  clip_floor=None)
                  
     print("Done generating all Figure 8 variants!")

@@ -181,16 +181,18 @@ def plot_figure8(data, out_pdf, out_png=None, clip_floor=1e-7, kappa_star=0.8333
     # Panel (b): Dominant wavenumber \kappa_\mathrm{peak} vs L/L_0
     # -------------------------------------------------------------------------
     valid_k = k_max > 0
-    ax_b.loglog(L[valid_k], k_max[valid_k], color='#d62728', marker='^', markersize=4.8,
-                linewidth=1.0, clip_on=True, zorder=3)
-                
-    # Theoretical discrete fundamental mode: 2\pi / (L/L_0)
+
+    # Theoretical discrete fundamental mode: 2\pi / (L/L_0) (drawn with high visibility)
     L_ref = np.logspace(0, np.log10(128), 100)
     k_ref = 2.0 * np.pi / L_ref
-    ax_b.loglog(L_ref, k_ref, 'k--', linewidth=1.1, label=r'$2\pi/(L/L_0)$', zorder=2)
-    
+    ax_b.loglog(L_ref, k_ref, 'k--', linewidth=1.2, dashes=(4, 2), label=r'$2\pi/(L/L_0)$', zorder=4)
+
     # Floquet maximum growth rate mode \kappa^*
-    ax_b.axhline(kappa_star, color='k', linestyle=':', linewidth=1.3, label=r'$\kappa^*$', zorder=2)
+    ax_b.axhline(kappa_star, color='k', linestyle=':', linewidth=1.3, label=r'$\kappa^*$', zorder=4)
+
+    # Plot data points without connecting lines so the theoretical dashed line remains unobstructed
+    ax_b.plot(L[valid_k], k_max[valid_k], color='#d62728', marker='^', markersize=4.8,
+              linestyle='none', clip_on=True, zorder=3)
     
     ax_b.set_xlabel(r'$L/L_0$', labelpad=2)
     ax_b.set_ylabel(r'$\kappa_\mathrm{peak}$', labelpad=2)

@@ -172,3 +172,4 @@ echo "=========================================================="
 time "$EXEC" "$SIZE" "$BATCH" "$L" "$ALPHA" "$H0" "$HA" "$OMEGA" "$DT" "$TRANSIENT_TIME" "$AVERAGING_TIME" "$WINDOW_TIME" "$SUBSAMPLE_RATE" "$PREFIX" "$EPS" "$SEED" "$BACKEND"
 
 echo "Task complete for L=$L."
+

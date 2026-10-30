@@ -17,6 +17,10 @@ Executes and recreates every figure from the paper:
 import os
 import sys
 import time
+import os
+import sys
+import time
+import shutil
 import argparse
 import subprocess
 from pathlib import Path
@@ -28,54 +32,63 @@ FIGURE_REGISTRY = {
         'title': 'Fig. 1: DW Coordinates & Schematic',
         'script': 'plot_figure1_schematic.py',
         'output_pdf': 'snap_system_345.pdf',
+        'standard_pdf': 'fig1_dw_schematic.pdf',
         'paper_label': 'fig:snap'
     },
     2: {
         'title': 'Fig. 2: Rigid DW Shapiro Steps & Velocities',
         'script': 'plot_figure2_rigid_wall.py',
         'output_pdf': 'figure2.pdf',
+        'standard_pdf': 'fig2_rigid_wall_shapiro.pdf',
         'paper_label': 'fig:ej_walker'
     },
     3: {
         'title': 'Fig. 3: Floquet Linear Stability Diagrams',
         'script': 'plot_figure3_floquet.py',
         'output_pdf': 'figure3.pdf',
+        'standard_pdf': 'fig3_floquet_stability.pdf',
         'paper_label': 'fig:sync_stability'
     },
     4: {
         'title': 'Fig. 4: Flexible Extended DW Dynamics vs h0',
         'script': 'plot_figure4_wall_metrics.py',
         'output_pdf': 'sweep_ha_3.pdf',
+        'standard_pdf': 'fig4_wall_metrics_ha3.pdf',
         'paper_label': 'fig:wall_metrics'
     },
     5: {
         'title': 'Fig. 5: Full Dynamical Phase Diagram (L=256)',
         'script': 'plot_figure5_phase_diagram.py',
         'output_pdf': 'phasediagram_L256.pdf',
+        'standard_pdf': 'fig5_phase_diagram_L256.pdf',
         'paper_label': 'fig:fases'
     },
     6: {
         'title': 'Fig. 6: Edwards-Wilkinson Scaling Collapse (NR)',
         'script': 'plot_figure6_nc_ew.py',
         'output_pdf': 'NC_EW_inset.pdf',
+        'standard_pdf': 'fig6_edwards_wilkinson_scaling.pdf',
         'paper_label': 'fig:estructura'
     },
     7: {
         'title': 'Fig. 7: SP Phase Spatiotemporal Cascade',
         'script': 'plot_figure7_sp_cascade.py',
         'output_pdf': 'sc_cascade.pdf',
+        'standard_pdf': 'fig7_sp_phase_cascade.pdf',
         'paper_label': 'fig:sc_cascade'
     },
     8: {
         'title': 'Fig. 8: SP Phase Finite-Size Scaling vs L',
         'script': 'plot_figure8_sc_scaling.py',
         'output_pdf': 'SC_scaling.pdf',
+        'standard_pdf': 'fig8_sp_finite_size_scaling.pdf',
         'paper_label': 'fig:estructuraSCvsL'
     },
     9: {
         'title': 'Fig. 9: Small-System Phase Diagram (L=8)',
         'script': 'plot_figure9_phase_diagram_L8.py',
         'output_pdf': 'phasediagram_L8.pdf',
+        'standard_pdf': 'fig9_phase_diagram_L8.pdf',
         'paper_label': 'fig:phasediagram_smallL'
     }
 }
@@ -90,7 +103,7 @@ def run_figure(fig_num, out_dir, export_paper=False):
         cmd.append("--export-paper")
 
     print(f"\n[{fig_num}/9] ========================================")
-    print(f"Generating {info['title']} ({info['output_pdf']})...")
+    print(f"Generating {info['title']} ({info['standard_pdf']})...")
     print(f"Command: {' '.join(cmd)}")
     print(f"========================================")
 
@@ -99,6 +112,19 @@ def run_figure(fig_num, out_dir, export_paper=False):
         subprocess.run(cmd, check=True)
         elapsed = time.time() - t0
         target_path = Path(out_dir) / info['output_pdf']
+
+        # If exported to paper, ensure standardized name and symlink are synced
+        if export_paper:
+            paper_dir = REPO_ROOT / "paper" / "figuras"
+            std_path = paper_dir / info['standard_pdf']
+            legacy_path = paper_dir / info['output_pdf']
+            if legacy_path.exists() and not legacy_path.is_symlink():
+                shutil.copy2(legacy_path, std_path)
+                legacy_path.unlink()
+                legacy_path.symlink_to(info['standard_pdf'])
+            elif std_path.exists() and not legacy_path.exists():
+                legacy_path.symlink_to(info['standard_pdf'])
+
         status = "SUCCESS" if target_path.exists() else "WARNING: Output file missing"
         return {'fig': fig_num, 'status': status, 'time': elapsed, 'file': str(target_path)}
     except Exception as e:

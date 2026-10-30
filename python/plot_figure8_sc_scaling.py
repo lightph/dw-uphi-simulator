@@ -154,24 +154,27 @@ def plot_figure8(data, out_pdf, out_png=None, clip_floor=1e-7, kappa_star=0.8333
     # -------------------------------------------------------------------------
     # Panel (a): DW steady-state roughness \langle w^2 \rangle_t vs L/L_0
     # -------------------------------------------------------------------------
+    ax_a.set_xscale('log')
+    ax_a.set_yscale('log')
     if clip_floor is not None:
         plot_var = np.maximum(var_u, clip_floor)
         if open_floor_markers:
             is_floor = var_u <= clip_floor
-            ax_a.loglog(L, plot_var, color='#1f77b4', linewidth=1.0, zorder=2)
             # Open markers for flat floor points
             ax_a.plot(L[is_floor], plot_var[is_floor], 'o', color='#1f77b4',
-                      markerfacecolor='white', markeredgewidth=1.0, markersize=4.5, zorder=3)
+                      markerfacecolor='white', markeredgewidth=1.0, markersize=4.5,
+                      linestyle='none', zorder=3)
             # Filled markers for finite roughness points
             ax_a.plot(L[~is_floor], plot_var[~is_floor], 'o', color='#1f77b4',
-                      markerfacecolor='#1f77b4', markersize=4.5, zorder=3)
+                      markerfacecolor='#1f77b4', markersize=4.5,
+                      linestyle='none', zorder=3)
         else:
-            ax_a.loglog(L, plot_var, color='#1f77b4', marker='o', markersize=4.5,
-                        linewidth=1.0, clip_on=True, zorder=3)
+            ax_a.plot(L, plot_var, color='#1f77b4', marker='o', markersize=4.5,
+                      linestyle='none', clip_on=True, zorder=3)
     else:
         valid = var_u > 0
-        ax_a.loglog(L[valid], var_u[valid], color='#1f77b4', marker='o', markersize=4.5,
-                    linewidth=1.0, clip_on=True, zorder=3)
+        ax_a.plot(L[valid], var_u[valid], color='#1f77b4', marker='o', markersize=4.5,
+                  linestyle='none', clip_on=True, zorder=3)
                     
     ax_a.set_ylabel(r'$\langle w^2 \rangle_t$', labelpad=2)
     ax_a.set_ylim(bottom=4e-9, top=0.2)

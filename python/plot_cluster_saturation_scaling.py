@@ -109,8 +109,9 @@ def plot_saturation_results(results, out_pdf, out_png=None):
     comp_L = np.array([r['L'] for r in results if r['is_complete'] and not np.isnan(r['var_u'])])
     comp_w2 = np.array([r['var_u'] for r in results if r['is_complete'] and not np.isnan(r['var_u'])])
     
-    run_L = np.array([r['L'] for r in results if not r['is_complete'] and not np.isnan(r['var_u'])])
-    run_w2 = np.array([r['var_u'] for r in results if not r['is_complete'] and not np.isnan(r['var_u'])])
+    # Filter running jobs strictly to currently active simulations (L <= 2048)
+    run_L = np.array([r['L'] for r in results if not r['is_complete'] and not np.isnan(r['var_u']) and r['L'] <= 2048.0])
+    run_w2 = np.array([r['var_u'] for r in results if not r['is_complete'] and not np.isnan(r['var_u']) and r['L'] <= 2048.0])
     
     if len(comp_L) == 0 and len(run_L) == 0:
         print("No valid saturation data found.")
@@ -156,7 +157,7 @@ def plot_saturation_results(results, out_pdf, out_png=None):
                 
     ax.set_xlabel(r'System length $L/L_0$')
     ax.set_ylabel(r'Interface roughness $\langle w^2 \rangle_t$')
-    ax.set_xlim(5.0, 1.2e4)
+    ax.set_xlim(5.0, 3.5e3)
     ax.set_ylim(2e-7, 100.0)
     ax.legend(loc='lower right', frameon=False, borderaxespad=0.3, handlelength=1.4)
     

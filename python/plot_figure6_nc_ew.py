@@ -176,6 +176,42 @@ def parse_parameters_file(param_path):
     return params
 
 
+def get_version_dataset(version):
+    root = Path(__file__).resolve().parent.parent
+    output_dir = root / "output"
+
+    if version == "original":
+        ref_dir = output_dir / "reference_nc_ew_data"
+        if not ref_dir.is_dir() or not list(ref_dir.glob("*_ps_step_*.txt")):
+            raise FileNotFoundError(f"Original dataset not found in {ref_dir}")
+        return ref_dir, str(ref_dir / "time_data"), "NC_EW_original"
+
+    elif version == "single_gpu":
+        gpu_dir = output_dir / "reference_nc_ew_data_gpu"
+        if not gpu_dir.is_dir() or not list(gpu_dir.glob("*_ps_step_*.txt")):
+            raise FileNotFoundError(f"Single-GPU dataset not found in {gpu_dir}")
+        return gpu_dir, str(gpu_dir / "time_data"), "NC_EW_single_gpu"
+
+    elif version == "ensemble_gpu":
+        ens_dir = output_dir / "fig6_ensemble_gpu"
+        if not ens_dir.is_dir():
+            raise FileNotFoundError(f"Ensemble dataset directory not found in {ens_dir}")
+        ens_avg = ens_dir / "ensemble_averaged"
+        if ens_avg.is_dir() and list(ens_avg.glob("*_ps_step_*.txt")):
+            data_dir = ens_avg
+        elif list(ens_dir.glob("seed_*")):
+            try:
+                from average_nc_ew_ensemble import average_ensemble
+            except ImportError:
+                from python.average_nc_ew_ensemble import average_ensemble
+            data_dir = average_ensemble(ens_dir)
+        else:
+            raise FileNotFoundError(f"No seeds or averaged data found in {ens_dir}")
+        return data_dir, str(data_dir / "time_data"), "NC_EW_ensemble_gpu"
+    else:
+        raise ValueError(f"Unknown version: {version}")
+
+
 def find_dataset(target_path=None):
     if target_path:
         p = Path(target_path).resolve()
@@ -256,9 +292,14 @@ def load_all_data(data_dir, prefix_base, min_step=16384):
             mask = (k > 0) & (Sk > 0)
             spectra.append((step, t, k[mask], Sk[mask]))
 
-    w2_file = f"{prefix_base}_transient_w2.txt"
-    if not os.path.exists(w2_file):
-        cand = list(data_dir.glob("*_transient_w2.txt"))
+    w2_file = None
+    sub_cand = list(data_dir.glob("*transient_w2_sub*.txt"))
+    if sub_cand:
+        w2_file = str(sub_cand[0])
+    elif os.path.exists(f"{prefix_base}_transient_w2.txt"):
+        w2_file = f"{prefix_base}_transient_w2.txt"
+    else:
+        cand = list(data_dir.glob("*transient_w2*.txt"))
         w2_file = str(cand[0]) if cand else None
 
     t_w2, w2 = None, None
@@ -317,6 +358,16 @@ def load_all_data(data_dir, prefix_base, min_step=16384):
     return spectra, t_w2, w2, dt
 
 
+def get_k_ref_prefactor(spectra):
+    if not spectra:
+        return 2.5
+    last_k, last_Sk = spectra[-1][2], spectra[-1][3]
+    low_k_mask = (last_k >= 1e-3) & (last_k <= 1e-2)
+    if np.any(low_k_mask):
+        return float(np.median(last_Sk[low_k_mask] * (last_k[low_k_mask]**2)) * 1.5)
+    return 2.5
+
+
 # ==============================================================================
 # Variant 1: Inset with Lifted & Shifted Placement (Default PRB Layout)
 # ==============================================================================
@@ -337,10 +388,12 @@ def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax_a.loglog(kb, Skb, color=color, alpha=0.95, lw=0.95, zorder=2 + i)
 
+    c_k = get_k_ref_prefactor(spectra)
     k_ref = np.array([1e-3, 7e-1])
-    ax_a.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax_a.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax_a.set_xlim(1e-3, 3.2)
-    ax_a.set_ylim(1e-4, 1e7)
+    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax_a.set_ylim(1e-4, y_max)
     ax_a.set_xlabel(r'$\kappa$', labelpad=1)
     ax_a.set_ylabel(r'$S_\kappa$', labelpad=1)
     ax_a.legend(loc='upper right', bbox_to_anchor=(0.98, 0.98), handlelength=1.5)
@@ -420,10 +473,12 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.75, zorder=2 + i)
 
+    c_k = get_k_ref_prefactor(spectra)
     k_ref = np.array([1e-3, 5e-1])
-    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.0, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.0, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
-    ax1.set_ylim(1e-4, 1e7)
+    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
     ax1.legend(loc='lower left', handlelength=1.2, borderaxespad=0.2)
@@ -496,10 +551,12 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
 
+    c_k = get_k_ref_prefactor(spectra)
     k_ref = np.array([1e-3, 7e-1])
-    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
-    ax1.set_ylim(1e-4, 1e7)
+    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
     ax1.legend(loc='lower left', handlelength=1.5)
@@ -579,10 +636,12 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
 
+    c_k = get_k_ref_prefactor(spectra)
     k_ref = np.array([1e-3, 7e-1])
-    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
-    ax1.set_ylim(1e-4, 1e7)
+    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
     ax1.legend(loc='lower left', handlelength=1.5)
@@ -657,10 +716,12 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.85, zorder=2 + i)
 
+    c_k = get_k_ref_prefactor(spectra)
     k_ref = np.array([1e-3, 7e-1])
-    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.1, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.1, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
-    ax1.set_ylim(1e-4, 1e7)
+    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
     ax1.legend(loc='lower left', handlelength=1.2, fontsize=7.8)
@@ -712,37 +773,37 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
     print(f"Generated Bonus (Wide Row): {out_pdf}")
 
 
-def generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", layout="all"):
+def generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", layout="all", base_name="NC_EW", copy_to_paper=False):
     import shutil
     do_all = (layout in ("all", "both"))
-    base_name = f"NC_EW{suffix}"
+    full_name = f"{base_name}{suffix}"
 
     if do_all or layout == "inset":
-        out_pdf = figures_dir / f"{base_name}_inset.pdf"
-        out_png = figures_dir / f"{base_name}.png"
+        out_pdf = figures_dir / f"{full_name}_inset.pdf"
+        out_png = figures_dir / f"{full_name}.png"
         make_variant_inset(spectra, t_w2, w2, out_pdf, out_png)
-        shutil.copy2(out_pdf, figures_dir / f"{base_name}.pdf")
-        if suffix == "":
+        shutil.copy2(out_pdf, figures_dir / f"{full_name}.pdf")
+        if copy_to_paper and suffix == "":
             shutil.copy2(out_pdf, paper_fig_dir / "NC_EW_inset.pdf")
 
     if do_all or layout == "side_by_side":
-        out_pdf = figures_dir / f"{base_name}_side_by_side.pdf"
-        out_png = figures_dir / f"{base_name}_side_by_side.png"
+        out_pdf = figures_dir / f"{full_name}_side_by_side.pdf"
+        out_png = figures_dir / f"{full_name}_side_by_side.png"
         make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png)
 
     if do_all or layout == "stacked":
-        out_pdf = figures_dir / f"{base_name}_stacked.pdf"
-        out_png = figures_dir / f"{base_name}_stacked.png"
+        out_pdf = figures_dir / f"{full_name}_stacked.pdf"
+        out_png = figures_dir / f"{full_name}_stacked.png"
         make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png)
 
     if do_all or layout == "compensated":
-        out_pdf = figures_dir / f"{base_name}_compensated.pdf"
-        out_png = figures_dir / f"{base_name}_compensated.png"
+        out_pdf = figures_dir / f"{full_name}_compensated.pdf"
+        out_png = figures_dir / f"{full_name}_compensated.png"
         make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png)
 
     if do_all or layout == "wide_row":
-        out_pdf = figures_dir / f"{base_name}_wide_row.pdf"
-        out_png = figures_dir / f"{base_name}_wide_row.png"
+        out_pdf = figures_dir / f"{full_name}_wide_row.pdf"
+        out_png = figures_dir / f"{full_name}_wide_row.png"
         make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png)
 
 
@@ -750,9 +811,14 @@ def generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", lay
 # Main
 # ==============================================================================
 def main():
+    import shutil
     parser = argparse.ArgumentParser(description="Plot PRB Figure 6 variants (1-column layout).")
     parser.add_argument("data_path", nargs="?", default=None,
                         help="Path to dataset directory or prefix (default: auto-detect)")
+    parser.add_argument("--version", choices=["original", "single_gpu", "ensemble_gpu", "all"],
+                        default=None, help="Specific version to plot (original, single_gpu, ensemble_gpu, or all)")
+    parser.add_argument("--all-versions", action="store_true",
+                        help="Generate all three figure versions sequentially (original, single_gpu, ensemble_gpu)")
     parser.add_argument("--layout", choices=["inset", "stacked", "side_by_side", "compensated", "wide_row", "all", "both"],
                         default="all", help="Variant layout to generate (default: all)")
     parser.add_argument("--times", choices=["both", "full", "half"],
@@ -761,33 +827,79 @@ def main():
                         help="Custom directory to save figures (default: paper/figuras and figures/)")
     args = parser.parse_args()
 
-    data_dir, prefix_base = find_dataset(args.data_path)
-    print(f"Loading simulation dataset from: {data_dir}")
-    print(f"Base prefix: {prefix_base}")
-
-    spectra, t_w2, w2, dt = load_all_data(data_dir, prefix_base)
-    print(f"Loaded {len(spectra)} spectrum times and {len(t_w2) if t_w2 is not None else 0} roughness points.")
-    if spectra:
-        print(f"  Full times span: {spectra[0][1]:.2f} (step {spectra[0][0]}) -> {spectra[-1][1]:.2f} (step {spectra[-1][0]})")
-
     root = Path(__file__).resolve().parent.parent
     paper_fig_dir = root / "paper" / "figuras"
     paper_fig_dir.mkdir(parents=True, exist_ok=True)
     figures_dir = Path(args.outdir).resolve() if args.outdir else root / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
 
-    # Compute subsampled times: keeping the longest one and every other one backwards
-    spectra_half = spectra[-1::-2][::-1]
+    # Determine execution mode: multi-version or single dataset
+    if args.all_versions or args.version == "all" or (args.data_path is None and args.version is None):
+        targets = [
+            ("original", True),
+            ("single_gpu", False),
+            ("ensemble_gpu", False)
+        ]
+    elif args.version:
+        targets = [(args.version, args.version == "original")]
+    else:
+        targets = None
 
-    if args.times in ("both", "full"):
-        print(f"\n--- Generating Full Set ({len(spectra)} times) ---")
-        generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", layout=args.layout)
+    if targets is not None:
+        for ver_name, copy_paper in targets:
+            try:
+                data_dir, prefix_base, base_stem = get_version_dataset(ver_name)
+            except Exception as e:
+                print(f"\n[Skipping {ver_name}]: {e}")
+                continue
 
-    if args.times in ("both", "half"):
-        print(f"\n--- Generating Half-Times Set ({len(spectra_half)} times) ---")
-        for s in spectra_half:
-            print(f"  step {s[0]}: t = {s[1]:.2f}")
-        generate_suite(spectra_half, t_w2, w2, paper_fig_dir, figures_dir, suffix="_half", layout=args.layout)
+            print(f"\n==========================================================")
+            print(f"Generating Version: {ver_name} (stem: {base_stem})")
+            print(f"Loading from: {data_dir}")
+            print(f"Base prefix: {prefix_base}")
+            print(f"==========================================================")
+
+            spectra, t_w2, w2, dt = load_all_data(data_dir, prefix_base)
+            print(f"Loaded {len(spectra)} spectrum times and {len(t_w2) if t_w2 is not None else 0} roughness points.")
+            if spectra:
+                print(f"  Full times span: {spectra[0][1]:.2f} (step {spectra[0][0]}) -> {spectra[-1][1]:.2f} (step {spectra[-1][0]})")
+
+            spectra_half = spectra[-1::-2][::-1]
+
+            if args.times in ("both", "full"):
+                print(f"\n--- Generating Full Set ({len(spectra)} times) ---")
+                generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", layout=args.layout, base_name=base_stem, copy_to_paper=copy_paper)
+
+            if args.times in ("both", "half"):
+                print(f"\n--- Generating Half-Times Set ({len(spectra_half)} times) ---")
+                generate_suite(spectra_half, t_w2, w2, paper_fig_dir, figures_dir, suffix="_half", layout=args.layout, base_name=base_stem, copy_to_paper=False)
+
+            if ver_name == "original":
+                shutil.copy2(figures_dir / f"{base_stem}.pdf", figures_dir / "NC_EW.pdf")
+                shutil.copy2(figures_dir / f"{base_stem}.png", figures_dir / "NC_EW.png")
+                shutil.copy2(figures_dir / f"{base_stem}_inset.pdf", figures_dir / "NC_EW_inset.pdf")
+
+    else:
+        data_dir, prefix_base = find_dataset(args.data_path)
+        print(f"Loading simulation dataset from: {data_dir}")
+        print(f"Base prefix: {prefix_base}")
+
+        spectra, t_w2, w2, dt = load_all_data(data_dir, prefix_base)
+        print(f"Loaded {len(spectra)} spectrum times and {len(t_w2) if t_w2 is not None else 0} roughness points.")
+        if spectra:
+            print(f"  Full times span: {spectra[0][1]:.2f} (step {spectra[0][0]}) -> {spectra[-1][1]:.2f} (step {spectra[-1][0]})")
+
+        spectra_half = spectra[-1::-2][::-1]
+
+        if args.times in ("both", "full"):
+            print(f"\n--- Generating Full Set ({len(spectra)} times) ---")
+            generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", layout=args.layout, base_name="NC_EW", copy_to_paper=True)
+
+        if args.times in ("both", "half"):
+            print(f"\n--- Generating Half-Times Set ({len(spectra_half)} times) ---")
+            for s in spectra_half:
+                print(f"  step {s[0]}: t = {s[1]:.2f}")
+            generate_suite(spectra_half, t_w2, w2, paper_fig_dir, figures_dir, suffix="_half", layout=args.layout, base_name="NC_EW", copy_to_paper=False)
 
     print("\n==========================================================")
     print("Figures successfully generated in paper/figuras/ and figures/!")

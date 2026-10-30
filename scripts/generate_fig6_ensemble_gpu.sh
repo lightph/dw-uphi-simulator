@@ -112,8 +112,6 @@ run_single_seed() {
     echo "Saving outputs to: $seed_dir"
     echo "=========================================================="
 
-    time "$EXEC" "$SIZE" "$L" "$ALPHA" "$H0" "$HA" "$OMEGA" "$DT" "$MAX_POWER" "$prefix" "$EPS" "$seed_val" "$BACKEND"
-
     cat <<EOF > "${seed_dir}/parameters.txt"
 Simulation: time_evo NC Edwards-Wilkinson (Ensemble Sample)
 Sample_Index: $task_num
@@ -131,6 +129,8 @@ EPS: $EPS
 SEED: $seed_val
 PREFIX: $prefix
 EOF
+
+    time "$EXEC" "$SIZE" "$L" "$ALPHA" "$H0" "$HA" "$OMEGA" "$DT" "$MAX_POWER" "$prefix" "$EPS" "$seed_val" "$BACKEND"
     echo "Sample ${task_num} completed."
 }
 
@@ -150,3 +150,4 @@ else
         python3 "${PROJECT_DIR}/python/average_nc_ew_ensemble.py" "$OUT_DIR"
     fi
 fi
+

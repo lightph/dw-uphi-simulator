@@ -7,6 +7,7 @@ build_native/
 #output and figures
 output/
 figures/
+figures_wip/
 saturation_rugosity.txt
 to_integrate/
 test_*

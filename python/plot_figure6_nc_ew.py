@@ -185,6 +185,18 @@ def find_dataset(target_path=None):
             return data_dir, str(data_dir / prefix)
         elif p.is_dir():
             data_dir = p
+            # Check if this is an ensemble directory containing ensemble_averaged/
+            ens_avg = data_dir / "ensemble_averaged"
+            if ens_avg.is_dir() and list(ens_avg.glob("*_ps_step_*.txt")):
+                data_dir = ens_avg
+            elif list(data_dir.glob("seed_*")):
+                # Automatically trigger ensemble averaging if not yet done
+                try:
+                    from average_nc_ew_ensemble import average_ensemble
+                except ImportError:
+                    from python.average_nc_ew_ensemble import average_ensemble
+                data_dir = average_ensemble(data_dir)
+
             w2_files = list(data_dir.glob("*_transient_w2.txt"))
             if w2_files:
                 prefix = w2_files[0].name.replace("_transient_w2.txt", "")

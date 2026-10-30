@@ -13,7 +13,17 @@
 # Spatiotemporal profile cascade snapshots of the SP phase (h0=4, ha=3)
 # ==============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -n "$SLURM_SUBMIT_DIR" ]; then
+    if [ -f "${SLURM_SUBMIT_DIR}/scripts/common_env.sh" ]; then
+        SCRIPT_DIR="${SLURM_SUBMIT_DIR}/scripts"
+    elif [ -f "${SLURM_SUBMIT_DIR}/common_env.sh" ]; then
+        SCRIPT_DIR="${SLURM_SUBMIT_DIR}"
+    else
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    fi
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 source "${SCRIPT_DIR}/common_env.sh"
 
 parse_common_args "$@"

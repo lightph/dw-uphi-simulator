@@ -71,34 +71,53 @@ def run_sp_snapshots(bin_path, out_prefix, size=256, L=128.0, dt=0.019634954):
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL)
 
 
-def plot_sp_cascade(snap_txt_file, out_pdf_path, L=128.0):
+def plot_sp_cascade(snap_txt_file, out_pdf_path, L_plot=128.0):
     setup_prb_style()
     with open(snap_txt_file, 'r') as f:
         header = f.readline().strip().split()
-        lines = [l.strip().split() for l in f if l.strip()]
+        raw_lines = [l.strip().split() for l in f if l.strip()]
 
-    if not lines:
+    if not raw_lines:
         raise ValueError("Snapshot file is empty.")
 
-    size = (len(header) - 2) // 2
-    x = np.linspace(0.0, L, size, endpoint=False)
+    # Filter for first batch
+    first_batch = raw_lines[0][0]
+    lines = [l for l in raw_lines if l[0] == first_batch]
+
+    total_pts = (len(header) - 2) // 2
+    # Standard spatial discretization dx = 0.5
+    dx = 0.5
+    n_plot = min(total_pts, int(round(L_plot / dx)))
+    x = np.linspace(0.0, L_plot, n_plot, endpoint=False)
+
+    # Subsample 8 snapshots across two periods (4*pi/omega)
+    if len(lines) > 8:
+        times = np.array([float(l[1]) for l in lines])
+        cos_t = np.cos(times)
+        # Find index closest to cos(t) = -1.0 in first quarter period
+        step_quarter = max(1, len(lines) // 8)
+        start_idx = int(np.argmin(np.abs(cos_t[:step_quarter] - (-1.0))))
+        selected_indices = [(start_idx + k * step_quarter) % len(lines) for k in range(8)]
+        plot_lines = [lines[i] for i in selected_indices]
+    else:
+        plot_lines = lines
 
     fig, ax_left = plt.subplots(figsize=(3.375, 3.2))
     ax_right = ax_left.twinx()
 
-    # Shared cyclic colormap
     cmap = plt.get_cmap('hsv')
-    n_lines = len(lines)
+    n_lines = len(plot_lines)
     # Stack lines vertically across [-3.5, 3.5]
     offsets = np.linspace(-3.5, 3.5, n_lines)
 
     cos_vals = []
-    for idx, row in enumerate(lines):
+    for idx, row in enumerate(plot_lines):
         t = float(row[1])
-        u_vals = np.array([float(row[2 + 2*i]) for i in range(size)])
-        phi_vals = np.array([float(row[2 + 2*i + 1]) for i in range(size)]) % (2.0 * np.pi)
+        u_vals = np.array([float(row[2 + 2*i]) for i in range(total_pts)])
+        phi_vals = np.array([float(row[2 + 2*i + 1]) for i in range(total_pts)]) % (2.0 * np.pi)
 
-        u_c = u_vals - np.mean(u_vals)
+        u_c = (u_vals - np.mean(u_vals))[:n_plot]
+        phi_plot = phi_vals[:n_plot]
         y_plot = u_c + offsets[idx]
 
         # Draw guideline
@@ -109,12 +128,12 @@ def plot_sp_cascade(snap_txt_file, out_pdf_path, L=128.0):
 
         lc = LineCollection(segments, cmap=cmap, norm=plt.Normalize(0, 2.0 * np.pi),
                             linewidth=1.4, zorder=3)
-        lc.set_array(phi_vals[:-1])
+        lc.set_array(phi_plot[:-1])
         ax_left.add_collection(lc)
 
         cos_vals.append(np.cos(t))
 
-    ax_left.set_xlim(0.0, L)
+    ax_left.set_xlim(0.0, L_plot)
     ax_left.set_ylim(-4.6, 4.6)
     ax_left.set_xlabel(r'$x$')
     ax_left.set_ylabel(r'$u - \langle u \rangle_x$')
@@ -122,7 +141,7 @@ def plot_sp_cascade(snap_txt_file, out_pdf_path, L=128.0):
 
     ax_right.set_ylim(-4.6, 4.6)
     ax_right.set_yticks(offsets)
-    ax_right.set_yticklabels([f"{int(round(c))}" if abs(c) > 0.5 else "0" for c in cos_vals])
+    ax_right.set_yticklabels([f"{int(round(c))}" if abs(c) > 0.4 else "0" for c in cos_vals])
     ax_right.set_ylabel(r'$\cos(\Omega t)$')
 
     # Top colorbar for \phi

@@ -15,7 +15,17 @@
 # System sizes: L = 2^exp, Size N = 2^(exp+1) (dx = 0.5) for exp in [0, 18]
 # ==============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -n "$SLURM_SUBMIT_DIR" ]; then
+    if [ -f "${SLURM_SUBMIT_DIR}/scripts/common_env.sh" ]; then
+        SCRIPT_DIR="${SLURM_SUBMIT_DIR}/scripts"
+    elif [ -f "${SLURM_SUBMIT_DIR}/common_env.sh" ]; then
+        SCRIPT_DIR="${SLURM_SUBMIT_DIR}"
+    else
+        SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    fi
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 source "${SCRIPT_DIR}/common_env.sh"
 
 parse_common_args "$@"

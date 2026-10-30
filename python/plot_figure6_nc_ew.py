@@ -245,18 +245,32 @@ def load_all_data(data_dir, prefix_base):
         w2_file = str(cand[0]) if cand else None
 
     if w2_file and os.path.exists(w2_file):
-        data_w2 = np.loadtxt(w2_file, skiprows=1)
-        if data_w2.size > 0:
-            if data_w2.ndim == 1:
-                data_w2 = data_w2.reshape(1, -1)
-            t_w2, w2 = data_w2[:, 1], data_w2[:, 3]
+        try:
+            import pandas as pd
+            df_w2 = pd.read_csv(w2_file, sep=r'\s+', on_bad_lines='skip')
+            t_w2 = df_w2.iloc[:, 1].values
+            w2 = df_w2.iloc[:, 3].values
             clean = (t_w2 >= 420) & (w2 > 0)
             if len(w2) > 1:
                 diff = np.abs(np.diff(np.log10(w2), prepend=np.log10(w2[0])))
                 clean = clean & (diff < 0.35)
             t_w2, w2 = t_w2[clean], w2[clean]
-        else:
-            t_w2, w2 = None, None
+        except Exception:
+            try:
+                data_w2 = np.loadtxt(w2_file, skiprows=1)
+                if data_w2.size > 0:
+                    if data_w2.ndim == 1:
+                        data_w2 = data_w2.reshape(1, -1)
+                    t_w2, w2 = data_w2[:, 1], data_w2[:, 3]
+                    clean = (t_w2 >= 420) & (w2 > 0)
+                    if len(w2) > 1:
+                        diff = np.abs(np.diff(np.log10(w2), prepend=np.log10(w2[0])))
+                        clean = clean & (diff < 0.35)
+                    t_w2, w2 = t_w2[clean], w2[clean]
+                else:
+                    t_w2, w2 = None, None
+            except Exception:
+                t_w2, w2 = None, None
     else:
         t_w2, w2 = None, None
 

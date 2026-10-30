@@ -15,7 +15,18 @@ export DT="${DT:-0.0196349540849362}"
 
 # Determine repository root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+if [ -n "$SLURM_SUBMIT_DIR" ]; then
+    if [ -f "${SLURM_SUBMIT_DIR}/CMakeLists.txt" ]; then
+        REPO_ROOT="${SLURM_SUBMIT_DIR}"
+    elif [ -f "${SLURM_SUBMIT_DIR}/../CMakeLists.txt" ]; then
+        REPO_ROOT="$(cd "${SLURM_SUBMIT_DIR}/.." && pwd)"
+    else
+        REPO_ROOT="$(cd "${SCRIPT_DIR}/.." 2>/dev/null && pwd)"
+    fi
+else
+    REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+export REPO_ROOT
 export PROJECT_DIR="${PROJECT_DIR:-$REPO_ROOT}"
 
 # Default Execution Mode and Hardware

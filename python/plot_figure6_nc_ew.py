@@ -198,6 +198,10 @@ def find_dataset(target_path=None):
     root = Path(__file__).resolve().parent.parent
     output_dir = root / "output"
 
+    ref_dir = output_dir / "reference_nc_ew_data"
+    if ref_dir.is_dir() and list(ref_dir.glob("*_ps_step_*.txt")):
+        return ref_dir, str(ref_dir / "time_data")
+
     candidate_dirs = sorted(output_dir.glob("time_evo_NC_*"), key=lambda d: d.stat().st_mtime, reverse=True)
     for c in candidate_dirs:
         if list(c.glob("*_transient_w2.txt")) or list(c.glob("*_ps_step_*.txt")):
@@ -205,15 +209,12 @@ def find_dataset(target_path=None):
             prefix = w2[0].name.replace("_transient_w2.txt", "") if w2 else "time_data"
             return c, str(c / prefix)
 
-    ref_dir = output_dir / "reference_nc_ew_data"
-    if ref_dir.is_dir() and list(ref_dir.glob("*_ps_step_*.txt")):
-        return ref_dir, str(ref_dir / "time_data")
-
     raise FileNotFoundError("Could not find any simulation data matching time_evo_NC_* in output/")
 
 
-def load_all_data(data_dir, prefix_base):
-    param_path = os.path.join(data_dir, "parameters.txt")
+def load_all_data(data_dir, prefix_base, min_step=16384):
+    data_dir = Path(data_dir)
+    param_path = data_dir / "parameters.txt"
     params = parse_parameters_file(param_path)
     dt = float(params.get("DT", 0.049087385212340519))
 
@@ -223,9 +224,13 @@ def load_all_data(data_dir, prefix_base):
 
     step_files = []
     for f in files:
+        if "inst" in Path(f).name:
+            continue
         try:
             step_str = Path(f).stem.split('_step_')[-1]
-            step_files.append((int(step_str), f))
+            step_val = int(step_str)
+            if step_val >= min_step:
+                step_files.append((step_val, f))
         except ValueError:
             continue
     step_files.sort(key=lambda p: p[0])
@@ -241,38 +246,61 @@ def load_all_data(data_dir, prefix_base):
 
     w2_file = f"{prefix_base}_transient_w2.txt"
     if not os.path.exists(w2_file):
-        cand = list(Path(data_dir).glob("*_transient_w2.txt"))
+        cand = list(data_dir.glob("*_transient_w2.txt"))
         w2_file = str(cand[0]) if cand else None
 
+    t_w2, w2 = None, None
     if w2_file and os.path.exists(w2_file):
         try:
-            import pandas as pd
-            df_w2 = pd.read_csv(w2_file, sep=r'\s+', on_bad_lines='skip')
-            t_w2 = df_w2.iloc[:, 1].values
-            w2 = df_w2.iloc[:, 3].values
-            clean = (t_w2 >= 420) & (w2 > 0)
-            if len(w2) > 1:
-                diff = np.abs(np.diff(np.log10(w2), prepend=np.log10(w2[0])))
-                clean = clean & (diff < 0.35)
-            t_w2, w2 = t_w2[clean], w2[clean]
-        except Exception:
-            try:
+            fsize = os.path.getsize(w2_file)
+            if fsize < 5 * 1024 * 1024:
                 data_w2 = np.loadtxt(w2_file, skiprows=1)
-                if data_w2.size > 0:
-                    if data_w2.ndim == 1:
-                        data_w2 = data_w2.reshape(1, -1)
-                    t_w2, w2 = data_w2[:, 1], data_w2[:, 3]
-                    clean = (t_w2 >= 420) & (w2 > 0)
-                    if len(w2) > 1:
-                        diff = np.abs(np.diff(np.log10(w2), prepend=np.log10(w2[0])))
-                        clean = clean & (diff < 0.35)
-                    t_w2, w2 = t_w2[clean], w2[clean]
-                else:
-                    t_w2, w2 = None, None
-            except Exception:
-                t_w2, w2 = None, None
-    else:
-        t_w2, w2 = None, None
+                if data_w2.ndim == 1:
+                    data_w2 = data_w2.reshape(1, -1)
+                t_raw, w_raw = data_w2[:, 1], data_w2[:, 3]
+            else:
+                est_lines = fsize / 65.0
+                stride = max(1, int(est_lines / 6000))
+                t_list, w_list = [], []
+                with open(w2_file, "r") as f:
+                    f.readline()
+                    for i, line in enumerate(f):
+                        if i % stride == 0:
+                            parts = line.split()
+                            if len(parts) >= 4:
+                                try:
+                                    t_list.append(float(parts[1]))
+                                    w_list.append(float(parts[3]))
+                                except ValueError:
+                                    pass
+                t_raw = np.array(t_list)
+                w_raw = np.array(w_list)
+
+            # Growth regime filter: t >= 420, positive roughness below extreme outliers
+            mask = (t_raw >= 420.0) & (t_raw < 1.5e7) & (w_raw > 0.0) & (w_raw < 1500.0)
+            t_clean, w_clean = t_raw[mask], w_raw[mask]
+
+            # Ensure strictly monotonic in time
+            order = np.argsort(t_clean)
+            t_clean, w_clean = t_clean[order], w_clean[order]
+
+            # Remove duplicates
+            _, uniq_idx = np.unique(t_clean, return_index=True)
+            t_clean, w_clean = t_clean[uniq_idx], w_clean[uniq_idx]
+
+            # 5-point median filter to clean isolated measurement/coordinate spikes
+            if len(w_clean) > 5:
+                window = 5
+                pad = window // 2
+                padded = np.pad(np.log10(w_clean), pad, mode="edge")
+                med = np.array([np.median(padded[i:i+window]) for i in range(len(w_clean))])
+                good = np.abs(np.log10(w_clean) - med) < 0.25
+                t_clean, w_clean = t_clean[good], w_clean[good]
+
+            t_w2, w2 = t_clean, w_clean
+        except Exception as e:
+            print(f"Warning: could not load roughness file {w2_file}: {e}")
+            t_w2, w2 = None, None
 
     return spectra, t_w2, w2, dt
 
@@ -283,7 +311,7 @@ def load_all_data(data_dir, prefix_base):
 def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
     setup_prb_style(compact=False)
     fig, (ax_a, ax_b) = plt.subplots(2, 1, figsize=(3.375, 4.4), sharex=False)
-    fig.subplots_adjust(top=0.86, bottom=0.10, left=0.17, right=0.96, hspace=0.25)
+    fig.subplots_adjust(top=0.86, bottom=0.10, left=0.17, right=0.96, hspace=0.26)
 
     times = [s[1] for s in spectra]
     vmin, vmax = min(times), max(times)
@@ -295,44 +323,48 @@ def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
         mask = (k <= 3.0)
         kb, Skb = log_bin_spectrum(k[mask], Sk[mask], n_bins=48)
         color = cmap(norm(t))
-        ax_a.loglog(kb, Skb, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
+        ax_a.loglog(kb, Skb, color=color, alpha=0.95, lw=0.95, zorder=2 + i)
 
     k_ref = np.array([1e-3, 7e-1])
-    ax_a.loglog(k_ref, 5.0 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax_a.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax_a.set_xlim(1e-3, 3.2)
     ax_a.set_ylim(1e-4, 1e7)
     ax_a.set_xlabel(r'$\kappa$', labelpad=1)
     ax_a.set_ylabel(r'$S_\kappa$', labelpad=1)
     ax_a.legend(loc='upper right', bbox_to_anchor=(0.98, 0.98), handlelength=1.5)
 
-    # Adjusted inset: shifted left to [x0=0.165, y0=0.185, width=0.375, height=0.315]
-    # Guarantees zero data overlap (data curves pass well above top edge y=0.500)
-    # and ample clearance (9 pt) from ax_a left spine and ticks.
-    ax_inset = ax_a.inset_axes([0.165, 0.185, 0.375, 0.315])
+    # Optimized Inset: shifted and sized for maximum legibility and zero overlap
+    ax_inset = ax_a.inset_axes([0.165, 0.175, 0.395, 0.330])
     ax_inset.set_facecolor('white')
 
-    # Use EXACT same times for both structure factor and universal function plots
     for i, (step, t, k, Sk) in enumerate(spectra):
         mask = (k <= 1.2)
         kb, Skb = log_bin_spectrum(k[mask], Sk[mask], n_bins=42)
         color = cmap(norm(t))
-        ax_inset.loglog(kb * np.sqrt(t), Skb / t, color=color, alpha=0.9, lw=0.85, zorder=2 + i)
+        ax_inset.loglog(kb * np.sqrt(t), Skb / t, color=color, alpha=0.95, lw=0.85, zorder=2 + i)
 
-    # Note: dashed reference line in inset removed per user instruction
     ax_inset.set_xlim(0.04, 120)
-    ax_inset.set_ylim(5e-4, 30)
-    ax_inset.set_xlabel(r'$\kappa \, t^{1/2}$', fontsize=7.0, labelpad=1.2)
-    ax_inset.set_ylabel(r'$S_\kappa \, t^{-1}$', fontsize=7.0, labelpad=1.2)
-    ax_inset.tick_params(axis='both', which='major', labelsize=6.0, length=2.0, pad=1.0)
-    ax_inset.tick_params(axis='both', which='minor', length=1.0)
+    ax_inset.set_ylim(4e-4, 30)
+    ax_inset.set_xlabel(r'$\kappa \, t^{1/2}$', fontsize=7.2, labelpad=1.0)
+    ax_inset.set_ylabel(r'$S_\kappa \, t^{-1}$', fontsize=7.2, labelpad=1.5)
+    ax_inset.set_yticks([1e-2, 1e0])
+    ax_inset.tick_params(axis='both', which='major', labelsize=6.2, length=2.2, width=0.6, pad=1.2)
+    ax_inset.tick_params(axis='both', which='minor', length=1.2, width=0.5)
 
     # 2. Panel 2: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax_b.loglog(t_w2, w2, color='tab:blue', lw=1.2)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+
+    t_ref_end = max(t_max_data, 1.4e7)
+    t_ref = np.array([3e2, t_ref_end])
     ax_b.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax_b.set_xlim(3e2, 1.4e7)
-    ax_b.set_ylim(2.5, 600)
+    ax_b.set_xlim(3e2, t_ref_end * 1.05)
+    ax_b.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
     ax_b.set_xlabel(r'$t$', labelpad=1)
     ax_b.set_ylabel(r'$w^2$', labelpad=1)
     ax_b.legend(loc='upper left', handlelength=1.5)
@@ -377,7 +409,7 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.75, zorder=2 + i)
 
     k_ref = np.array([1e-3, 5e-1])
-    ax1.loglog(k_ref, 4.5 * (k_ref**-2), 'k--', lw=1.0, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.0, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
     ax1.set_ylim(1e-4, 1e7)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
@@ -396,7 +428,7 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
     ax2.loglog(u_ref, f_ref, 'k--', lw=1.0, zorder=20)
 
     ax2.set_xlim(0.04, 120)
-    ax2.set_ylim(5e-4, 30)
+    ax2.set_ylim(4e-4, 30)
     ax2.set_xlabel(r'$\kappa \, t^{1/2}$', labelpad=1)
     ax2.set_ylabel(r'$S_\kappa \, t^{-1}$', labelpad=0.8)
     ax2.tick_params(axis='y', pad=1.5)
@@ -404,10 +436,17 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
     # 3. Bottom: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.1)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+
+    t_ref_end = max(t_max_data, 1.4e7)
+    t_ref = np.array([3e2, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.1, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(3e2, t_ref_end * 1.05)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
     ax3.set_xlabel(r'$t$', labelpad=1.5, fontsize=10)
     ax3.set_ylabel(r'$w^2$', labelpad=1.5, fontsize=10)
     ax3.legend(loc='upper left', handlelength=1.4, fontsize=8.0)
@@ -446,7 +485,7 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
 
     k_ref = np.array([1e-3, 7e-1])
-    ax1.loglog(k_ref, 5.0 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
     ax1.set_ylim(1e-4, 1e7)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
@@ -465,7 +504,7 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
     ax2.loglog(u_ref, f_ref, 'k--', lw=1.2, zorder=20, label=r'1D EW Master Curve')
 
     ax2.set_xlim(0.04, 120)
-    ax2.set_ylim(5e-4, 30)
+    ax2.set_ylim(4e-4, 30)
     ax2.set_xlabel(r'$\kappa \, t^{1/2}$', labelpad=1)
     ax2.set_ylabel(r'$S_\kappa \, t^{-1}$', labelpad=1)
     ax2.legend(loc='lower left', handlelength=1.5)
@@ -473,10 +512,17 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
     # Plot 3: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.2)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+
+    t_ref_end = max(t_max_data, 1.4e7)
+    t_ref = np.array([3e2, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(3e2, t_ref_end * 1.05)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.5)
@@ -522,7 +568,7 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
 
     k_ref = np.array([1e-3, 7e-1])
-    ax1.loglog(k_ref, 5.0 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
     ax1.set_ylim(1e-4, 1e7)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
@@ -551,10 +597,17 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
     # Plot 3: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.2)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+
+    t_ref_end = max(t_max_data, 1.4e7)
+    t_ref = np.array([3e2, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(3e2, t_ref_end * 1.05)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.5)
@@ -593,7 +646,7 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.85, zorder=2 + i)
 
     k_ref = np.array([1e-3, 7e-1])
-    ax1.loglog(k_ref, 5.0 * (k_ref**-2), 'k--', lw=1.1, label=r'$\propto \kappa^{-2}$', zorder=20)
+    ax1.loglog(k_ref, 2.5 * (k_ref**-2), 'k--', lw=1.1, label=r'$\propto \kappa^{-2}$', zorder=20)
     ax1.set_xlim(1e-3, 3.2)
     ax1.set_ylim(1e-4, 1e7)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
@@ -612,17 +665,24 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
     ax2.loglog(u_ref, f_ref, 'k--', lw=1.1, zorder=20)
 
     ax2.set_xlim(0.04, 120)
-    ax2.set_ylim(5e-4, 30)
+    ax2.set_ylim(4e-4, 30)
     ax2.set_xlabel(r'$\kappa \, t^{1/2}$', labelpad=1)
     ax2.set_ylabel(r'$S_\kappa \, t^{-1}$', labelpad=1)
 
     # 3. Roughness
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.1)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+
+    t_ref_end = max(t_max_data, 1.4e7)
+    t_ref = np.array([3e2, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.1, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(3e2, t_ref_end * 1.05)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.2, fontsize=7.8)

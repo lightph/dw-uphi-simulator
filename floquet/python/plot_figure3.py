@@ -182,7 +182,14 @@ def plot_figure3(out_dirs=None, recompute=False, n_h0=300, n_kappa=200):
         fig.savefig(target)
         saved_paths.append(target)
         fig.savefig(out_p / "figure3.png")
-        print(f"Saved: {target}")
+
+        # Also save standard PRB name
+        std_target = out_p / "fig3_floquet_stability.pdf"
+        if not std_target.exists() or not std_target.samefile(target):
+            fig.savefig(std_target)
+            fig.savefig(out_p / "fig3_floquet_stability.png")
+
+        print(f"Saved: {target} (and {std_target})")
 
     plt.close(fig)
     return saved_paths

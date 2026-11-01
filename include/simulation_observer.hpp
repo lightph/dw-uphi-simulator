@@ -108,7 +108,7 @@ class SimulationObserver {
                 Real mean_sin2phi = h_mean_sin[idx];
                 Real h_val = h0_b + ha_b * std::cos(omega * t_history[s]);
 
-                Real var_u = mean_u2 - (mean_u * mean_u);
+                Real var_u = std::max(Real(0.0), mean_u2 - (mean_u * mean_u));
                 Real u_dot = 0.5 * (alpha * alpha * h_val + mean_sin2phi);
                 Real phi_dot = 0.5 * (alpha * h_val - alpha * mean_sin2phi);
 

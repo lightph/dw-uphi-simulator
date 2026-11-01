@@ -329,8 +329,8 @@ def load_all_data(data_dir, prefix_base, min_step=16384):
                 t_raw = np.array(t_list)
                 w_raw = np.array(w_list)
 
-            # Growth regime filter: t >= 420, positive roughness below extreme outliers
-            mask = (t_raw >= 420.0) & (t_raw < 1.5e7) & (w_raw > 0.0) & (w_raw < 1500.0)
+            # Growth regime filter: t >= 300, positive finite roughness
+            mask = (t_raw >= 300.0) & (w_raw > 0.0) & np.isfinite(w_raw)
             t_clean, w_clean = t_raw[mask], w_raw[mask]
 
             # Ensure strictly monotonic in time
@@ -362,10 +362,34 @@ def get_k_ref_prefactor(spectra):
     if not spectra:
         return 2.5
     last_k, last_Sk = spectra[-1][2], spectra[-1][3]
+    decay_mask = (last_k >= 0.03) & (last_k <= 0.4)
+    if np.any(decay_mask):
+        return float(np.median(last_Sk[decay_mask] * (last_k[decay_mask]**2)))
     low_k_mask = (last_k >= 1e-3) & (last_k <= 1e-2)
     if np.any(low_k_mask):
         return float(np.median(last_Sk[low_k_mask] * (last_k[low_k_mask]**2)) * 1.5)
     return 2.5
+
+
+def get_plot_bounds(spectra):
+    if not spectra:
+        return 1e-3, 0.04, 2.5, 1e5, 7.68
+    k_min_data = min(s[2].min() for s in spectra)
+    k_min_plot = min(1e-3, max(k_min_data * 0.85, 3e-5))
+
+    u_min_data = min((s[2] * np.sqrt(s[1])).min() for s in spectra)
+    u_min_plot = min(0.04, max(u_min_data * 0.85, 5e-4))
+
+    c_k = get_k_ref_prefactor(spectra)
+    data_max = max(s[3].max() for s in spectra)
+    y_max = max(1e5, 10**np.ceil(np.log10(data_max * 2.5)))
+
+    all_u = np.concatenate([s[2] * np.sqrt(s[1]) for s in spectra])
+    all_y = np.concatenate([s[3] / s[1] for s in spectra])
+    low_u_mask = (all_u < 0.2) & (all_u > 0)
+    p0 = float(np.median(all_y[low_u_mask])) if np.any(low_u_mask) else 3.2 * 2.4
+
+    return k_min_plot, u_min_plot, c_k, y_max, p0
 
 
 # ==============================================================================
@@ -381,6 +405,8 @@ def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
     norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
     cmap = cm.viridis
 
+    k_min_plot, u_min_plot, c_k, y_max, p0 = get_plot_bounds(spectra)
+
     # 1. Panel 1: S_\kappa vs \kappa (log-binned to match master plot smoothness)
     for i, (step, t, k, Sk) in enumerate(spectra):
         mask = (k <= 3.0)
@@ -388,11 +414,9 @@ def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax_a.loglog(kb, Skb, color=color, alpha=0.95, lw=0.95, zorder=2 + i)
 
-    c_k = get_k_ref_prefactor(spectra)
-    k_ref = np.array([1e-3, 7e-1])
+    k_ref = np.array([1.5e-2, 7e-1])
     ax_a.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
-    ax_a.set_xlim(1e-3, 3.2)
-    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax_a.set_xlim(k_min_plot, 3.2)
     ax_a.set_ylim(1e-4, y_max)
     ax_a.set_xlabel(r'$\kappa$', labelpad=1)
     ax_a.set_ylabel(r'$S_\kappa$', labelpad=1)
@@ -408,7 +432,12 @@ def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax_inset.loglog(kb * np.sqrt(t), Skb / t, color=color, alpha=0.95, lw=0.85, zorder=2 + i)
 
-    ax_inset.set_xlim(0.04, 120)
+    u_ref = np.logspace(np.log10(u_min_plot), 2.1, 100)
+    gamma = max(0.1, p0 / max(c_k, 0.05))
+    f_ref = c_k * (1.0 - np.exp(-gamma * (u_ref**2))) / (u_ref**2)
+    ax_inset.loglog(u_ref, f_ref, 'k--', lw=1.0, zorder=20)
+
+    ax_inset.set_xlim(u_min_plot, 120)
     ax_inset.set_ylim(4e-4, 30)
     ax_inset.set_xlabel(r'$\kappa \, t^{1/2}$', fontsize=7.2, labelpad=1.0)
     ax_inset.set_ylabel(r'$S_\kappa \, t^{-1}$', fontsize=7.2, labelpad=1.5)
@@ -421,15 +450,18 @@ def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
         ax_b.loglog(t_w2, w2, color='tab:blue', lw=1.2)
         t_max_data = t_w2.max()
         w2_max_data = w2.max()
+        t_min_data = t_w2.min()
     else:
         t_max_data = 1.4e7
         w2_max_data = 600.0
+        t_min_data = 3e2
 
-    t_ref_end = max(t_max_data, 1.4e7)
-    t_ref = np.array([3e2, t_ref_end])
+    t_start = min(3e2, t_min_data)
+    t_ref_end = t_max_data
+    t_ref = np.array([t_start, t_ref_end])
     ax_b.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax_b.set_xlim(3e2, t_ref_end * 1.05)
-    ax_b.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
+    ax_b.set_xlim(t_start, t_ref_end)
+    ax_b.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax_b.set_xlabel(r'$t$', labelpad=1)
     ax_b.set_ylabel(r'$w^2$', labelpad=1)
     ax_b.legend(loc='upper left', handlelength=1.5)
@@ -466,6 +498,8 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
     norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
     cmap = cm.viridis
 
+    k_min_plot, u_min_plot, c_k, y_max, p0 = get_plot_bounds(spectra)
+
     # 1. Top-Left: S_\kappa vs \kappa (log-binned to match master plot)
     for i, (step, t, k, Sk) in enumerate(spectra):
         mask = (k <= 3.0)
@@ -473,11 +507,9 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.75, zorder=2 + i)
 
-    c_k = get_k_ref_prefactor(spectra)
-    k_ref = np.array([1e-3, 5e-1])
+    k_ref = np.array([1.5e-2, 5e-1])
     ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.0, label=r'$\propto \kappa^{-2}$', zorder=20)
-    ax1.set_xlim(1e-3, 3.2)
-    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_xlim(k_min_plot, 3.2)
     ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
@@ -490,11 +522,12 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax2.loglog(kb * np.sqrt(t), Skb / t, color=color, alpha=0.9, lw=0.85, zorder=2 + i)
 
-    u_ref = np.logspace(-1.4, 2.1, 100)
-    f_ref = 3.2 * (1.0 - np.exp(-2.0 * 1.2 * (u_ref**2))) / (u_ref**2)
+    u_ref = np.logspace(np.log10(u_min_plot), 2.1, 100)
+    gamma = max(0.1, p0 / max(c_k, 0.05))
+    f_ref = c_k * (1.0 - np.exp(-gamma * (u_ref**2))) / (u_ref**2)
     ax2.loglog(u_ref, f_ref, 'k--', lw=1.0, zorder=20)
 
-    ax2.set_xlim(0.04, 120)
+    ax2.set_xlim(u_min_plot, 120)
     ax2.set_ylim(4e-4, 30)
     ax2.set_xlabel(r'$\kappa \, t^{1/2}$', labelpad=1)
     ax2.set_ylabel(r'$S_\kappa \, t^{-1}$', labelpad=0.8)
@@ -505,15 +538,18 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.1)
         t_max_data = t_w2.max()
         w2_max_data = w2.max()
+        t_min_data = t_w2.min()
     else:
         t_max_data = 1.4e7
         w2_max_data = 600.0
+        t_min_data = 3e2
 
-    t_ref_end = max(t_max_data, 1.4e7)
-    t_ref = np.array([3e2, t_ref_end])
+    t_start = min(3e2, t_min_data)
+    t_ref_end = t_max_data
+    t_ref = np.array([t_start, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.1, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, t_ref_end * 1.05)
-    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
+    ax3.set_xlim(t_start, t_ref_end)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1.5, fontsize=10)
     ax3.set_ylabel(r'$w^2$', labelpad=1.5, fontsize=10)
     ax3.legend(loc='upper left', handlelength=1.4, fontsize=8.0)
@@ -544,6 +580,8 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
     norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
     cmap = cm.viridis
 
+    k_min_plot, u_min_plot, c_k, y_max, p0 = get_plot_bounds(spectra)
+
     # Plot 1: S_\kappa vs \kappa (log-binned to match master plot)
     for i, (step, t, k, Sk) in enumerate(spectra):
         mask = (k <= 3.0)
@@ -551,11 +589,9 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
 
-    c_k = get_k_ref_prefactor(spectra)
-    k_ref = np.array([1e-3, 7e-1])
+    k_ref = np.array([1.5e-2, 7e-1])
     ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
-    ax1.set_xlim(1e-3, 3.2)
-    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_xlim(k_min_plot, 3.2)
     ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
@@ -568,11 +604,12 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax2.loglog(kb * np.sqrt(t), Skb / t, color=color, alpha=0.9, lw=0.9, zorder=2 + i)
 
-    u_ref = np.logspace(-1.4, 2.1, 100)
-    f_ref = 3.2 * (1.0 - np.exp(-2.0 * 1.2 * (u_ref**2))) / (u_ref**2)
+    u_ref = np.logspace(np.log10(u_min_plot), 2.1, 100)
+    gamma = max(0.1, p0 / max(c_k, 0.05))
+    f_ref = c_k * (1.0 - np.exp(-gamma * (u_ref**2))) / (u_ref**2)
     ax2.loglog(u_ref, f_ref, 'k--', lw=1.2, zorder=20, label=r'1D EW Master Curve')
 
-    ax2.set_xlim(0.04, 120)
+    ax2.set_xlim(u_min_plot, 120)
     ax2.set_ylim(4e-4, 30)
     ax2.set_xlabel(r'$\kappa \, t^{1/2}$', labelpad=1)
     ax2.set_ylabel(r'$S_\kappa \, t^{-1}$', labelpad=1)
@@ -583,15 +620,18 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.2)
         t_max_data = t_w2.max()
         w2_max_data = w2.max()
+        t_min_data = t_w2.min()
     else:
         t_max_data = 1.4e7
         w2_max_data = 600.0
+        t_min_data = 3e2
 
-    t_ref_end = max(t_max_data, 1.4e7)
-    t_ref = np.array([3e2, t_ref_end])
+    t_start = min(3e2, t_min_data)
+    t_ref_end = t_max_data
+    t_ref = np.array([t_start, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, t_ref_end * 1.05)
-    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
+    ax3.set_xlim(t_start, t_ref_end)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.5)
@@ -629,6 +669,8 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
     norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
     cmap = cm.viridis
 
+    k_min_plot, u_min_plot, c_k, y_max, p0 = get_plot_bounds(spectra)
+
     # Plot 1: S_\kappa vs \kappa (log-binned to match master plot)
     for i, (step, t, k, Sk) in enumerate(spectra):
         mask = (k <= 3.0)
@@ -636,11 +678,9 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
 
-    c_k = get_k_ref_prefactor(spectra)
-    k_ref = np.array([1e-3, 7e-1])
+    k_ref = np.array([1.5e-2, 7e-1])
     ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.2, label=r'$\propto \kappa^{-2}$', zorder=20)
-    ax1.set_xlim(1e-3, 3.2)
-    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_xlim(k_min_plot, 3.2)
     ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
@@ -655,11 +695,11 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
         y_comp = (Skb / t) * (u**2)
         ax2.loglog(u, y_comp, color=color, alpha=0.9, lw=0.95, zorder=2 + i)
 
-    # Horizontal asymptote line at plateau = 3.2
-    u_asymptote = np.array([0.8, 120.0])
-    ax2.loglog(u_asymptote, np.full_like(u_asymptote, 3.2), 'k--', lw=1.2, label=r'$\propto \text{const}$', zorder=20)
+    # Horizontal asymptote line at plateau = c_k
+    u_asymptote = np.array([max(0.8, u_min_plot * 2.0), 120.0])
+    ax2.loglog(u_asymptote, np.full_like(u_asymptote, c_k), 'k--', lw=1.2, label=r'$\propto \text{const}$', zorder=20)
 
-    ax2.set_xlim(0.04, 120)
+    ax2.set_xlim(u_min_plot, 120)
     ax2.set_ylim(0.08, 15)
     ax2.set_xlabel(r'$\kappa \, t^{1/2}$', labelpad=1)
     ax2.set_ylabel(r'$S_\kappa \, \kappa^2$', labelpad=1)
@@ -670,15 +710,18 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.2)
         t_max_data = t_w2.max()
         w2_max_data = w2.max()
+        t_min_data = t_w2.min()
     else:
         t_max_data = 1.4e7
         w2_max_data = 600.0
+        t_min_data = 3e2
 
-    t_ref_end = max(t_max_data, 1.4e7)
-    t_ref = np.array([3e2, t_ref_end])
+    t_start = min(3e2, t_min_data)
+    t_ref_end = t_max_data
+    t_ref = np.array([t_start, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, t_ref_end * 1.05)
-    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
+    ax3.set_xlim(t_start, t_ref_end)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.5)
@@ -709,6 +752,8 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
     norm = mcolors.LogNorm(vmin=vmin, vmax=vmax)
     cmap = cm.viridis
 
+    k_min_plot, u_min_plot, c_k, y_max, p0 = get_plot_bounds(spectra)
+
     # 1. S_\kappa vs \kappa (log-binned to match master plot)
     for i, (step, t, k, Sk) in enumerate(spectra):
         mask = (k <= 3.0)
@@ -716,11 +761,9 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax1.loglog(kb, Skb, color=color, alpha=0.9, lw=0.85, zorder=2 + i)
 
-    c_k = get_k_ref_prefactor(spectra)
-    k_ref = np.array([1e-3, 7e-1])
+    k_ref = np.array([1.5e-2, 7e-1])
     ax1.loglog(k_ref, c_k * (k_ref**-2), 'k--', lw=1.1, label=r'$\propto \kappa^{-2}$', zorder=20)
-    ax1.set_xlim(1e-3, 3.2)
-    y_max = max(1e5, 10**np.ceil(np.log10(c_k * 1e6 * 2.2)))
+    ax1.set_xlim(k_min_plot, 3.2)
     ax1.set_ylim(1e-4, y_max)
     ax1.set_xlabel(r'$\kappa$', labelpad=1)
     ax1.set_ylabel(r'$S_\kappa$', labelpad=1)
@@ -733,11 +776,12 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
         color = cmap(norm(t))
         ax2.loglog(kb * np.sqrt(t), Skb / t, color=color, alpha=0.9, lw=0.8, zorder=2 + i)
 
-    u_ref = np.logspace(-1.4, 2.1, 100)
-    f_ref = 3.2 * (1.0 - np.exp(-2.0 * 1.2 * (u_ref**2))) / (u_ref**2)
+    u_ref = np.logspace(np.log10(u_min_plot), 2.1, 100)
+    gamma = max(0.1, p0 / max(c_k, 0.05))
+    f_ref = c_k * (1.0 - np.exp(-gamma * (u_ref**2))) / (u_ref**2)
     ax2.loglog(u_ref, f_ref, 'k--', lw=1.1, zorder=20)
 
-    ax2.set_xlim(0.04, 120)
+    ax2.set_xlim(u_min_plot, 120)
     ax2.set_ylim(4e-4, 30)
     ax2.set_xlabel(r'$\kappa \, t^{1/2}$', labelpad=1)
     ax2.set_ylabel(r'$S_\kappa \, t^{-1}$', labelpad=1)
@@ -747,15 +791,18 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.1)
         t_max_data = t_w2.max()
         w2_max_data = w2.max()
+        t_min_data = t_w2.min()
     else:
         t_max_data = 1.4e7
         w2_max_data = 600.0
+        t_min_data = 3e2
 
-    t_ref_end = max(t_max_data, 1.4e7)
-    t_ref = np.array([3e2, t_ref_end])
+    t_start = min(3e2, t_min_data)
+    t_ref_end = t_max_data
+    t_ref = np.array([t_start, t_ref_end])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.1, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, t_ref_end * 1.05)
-    ax3.set_ylim(2.5, max(w2_max_data * 1.15, 600.0))
+    ax3.set_xlim(t_start, t_ref_end)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.2, fontsize=7.8)
@@ -785,6 +832,10 @@ def generate_suite(spectra, t_w2, w2, paper_fig_dir, figures_dir, suffix="", lay
         shutil.copy2(out_pdf, figures_dir / f"{full_name}.pdf")
         if copy_to_paper and suffix == "":
             shutil.copy2(out_pdf, paper_fig_dir / "NC_EW_inset.pdf")
+            try:
+                shutil.copy2(out_pdf, paper_fig_dir / "fig6_edwards_wilkinson_scaling.pdf")
+            except Exception:
+                pass
 
     if do_all or layout == "side_by_side":
         out_pdf = figures_dir / f"{full_name}_side_by_side.pdf"
@@ -836,12 +887,12 @@ def main():
     # Determine execution mode: multi-version or single dataset
     if args.all_versions or args.version == "all" or (args.data_path is None and args.version is None):
         targets = [
-            ("original", True),
+            ("original", False),
             ("single_gpu", False),
-            ("ensemble_gpu", False)
+            ("ensemble_gpu", True)
         ]
     elif args.version:
-        targets = [(args.version, args.version == "original")]
+        targets = [(args.version, True)]
     else:
         targets = None
 

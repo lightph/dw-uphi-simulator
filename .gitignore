@@ -34,3 +34,8 @@ docs/latex/
 docs/xml/
 .aider*
 
+# Untracked review and large cluster figures
+adversarial_review/
+figures_L131072/
+
+

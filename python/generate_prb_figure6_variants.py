@@ -315,10 +315,18 @@ def make_variant_inset(spectra, t_w2, w2, out_pdf, out_png=None):
     # 2. Panel 2: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax_b.loglog(t_w2, w2, color='tab:blue', lw=1.2)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+        t_min_data = t_w2.min()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+        t_min_data = 3e2
+    t_start = min(3e2, t_min_data)
+    t_ref = np.array([t_start, t_max_data])
     ax_b.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax_b.set_xlim(3e2, 1.4e7)
-    ax_b.set_ylim(2.5, 600)
+    ax_b.set_xlim(t_start, t_max_data)
+    ax_b.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax_b.set_xlabel(r'$t$', labelpad=1)
     ax_b.set_ylabel(r'$w^2$', labelpad=1)
     ax_b.legend(loc='upper left', handlelength=1.5)
@@ -390,10 +398,18 @@ def make_variant_side_by_side(spectra, t_w2, w2, out_pdf, out_png=None):
     # 3. Bottom: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.1)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+        t_min_data = t_w2.min()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+        t_min_data = 3e2
+    t_start = min(3e2, t_min_data)
+    t_ref = np.array([t_start, t_max_data])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.1, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(t_start, t_max_data)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1.5, fontsize=10)
     ax3.set_ylabel(r'$w^2$', labelpad=1.5, fontsize=10)
     ax3.legend(loc='upper left', handlelength=1.4, fontsize=8.0)
@@ -459,10 +475,18 @@ def make_variant_stacked(spectra, t_w2, w2, out_pdf, out_png=None):
     # Plot 3: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.2)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+        t_min_data = t_w2.min()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+        t_min_data = 3e2
+    t_start = min(3e2, t_min_data)
+    t_ref = np.array([t_start, t_max_data])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(t_start, t_max_data)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.5)
@@ -537,10 +561,18 @@ def make_variant_compensated(spectra, t_w2, w2, out_pdf, out_png=None):
     # Plot 3: Interface roughness w^2 vs t
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.2)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+        t_min_data = t_w2.min()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+        t_min_data = 3e2
+    t_start = min(3e2, t_min_data)
+    t_ref = np.array([t_start, t_max_data])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.2, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(t_start, t_max_data)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.5)
@@ -605,10 +637,18 @@ def make_variant_wide_row(spectra, t_w2, w2, out_pdf, out_png=None):
     # 3. Roughness
     if t_w2 is not None and len(t_w2) > 0:
         ax3.loglog(t_w2, w2, color='tab:blue', lw=1.1)
-    t_ref = np.array([3e2, 1.4e7])
+        t_max_data = t_w2.max()
+        w2_max_data = w2.max()
+        t_min_data = t_w2.min()
+    else:
+        t_max_data = 1.4e7
+        w2_max_data = 600.0
+        t_min_data = 3e2
+    t_start = min(3e2, t_min_data)
+    t_ref = np.array([t_start, t_max_data])
     ax3.loglog(t_ref, 0.18 * np.sqrt(t_ref), 'k--', lw=1.1, label=r'$\propto t^{1/2}$')
-    ax3.set_xlim(3e2, 1.4e7)
-    ax3.set_ylim(2.5, 600)
+    ax3.set_xlim(t_start, t_max_data)
+    ax3.set_ylim(2.5, max(w2_max_data * 1.25, 120.0))
     ax3.set_xlabel(r'$t$', labelpad=1)
     ax3.set_ylabel(r'$w^2$', labelpad=1)
     ax3.legend(loc='upper left', handlelength=1.2, fontsize=7.8)

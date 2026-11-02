@@ -151,15 +151,130 @@ def log_bin_spectrum(k, Sk, n_bins=42):
     """
     Logarithmically bins spectrum to eliminate finite-size FFT sample fluctuations
     while strictly preserving scaling exponents and power-law amplitudes.
+    Vectorized with np.digitize and np.bincount for O(N) performance.
     """
-    k_edges = np.logspace(np.log10(k.min()), np.log10(k.max()), n_bins + 1)
+    if len(k) == 0:
+        return np.array([]), np.array([])
+    k_min, k_max = k.min(), k.max()
+    if k_min <= 0 or k_min >= k_max:
+        return k, Sk
+    k_edges = np.logspace(np.log10(k_min), np.log10(k_max), n_bins + 1)
     k_centers = np.sqrt(k_edges[:-1] * k_edges[1:])
-    Sk_binned = np.zeros(n_bins)
-    for i in range(n_bins):
-        m = (k >= k_edges[i]) & (k < k_edges[i+1])
-        Sk_binned[i] = np.mean(Sk[m]) if np.any(m) else np.nan
-    valid = ~np.isnan(Sk_binned)
-    return k_centers[valid], Sk_binned[valid]
+
+    bin_idx = np.digitize(k, k_edges) - 1
+    valid_mask = (bin_idx >= 0) & (bin_idx < n_bins)
+    if not np.any(valid_mask):
+        return np.array([]), np.array([])
+
+    counts = np.bincount(bin_idx[valid_mask], minlength=n_bins)
+    sums = np.bincount(bin_idx[valid_mask], weights=Sk[valid_mask], minlength=n_bins)
+
+    nonzero = counts > 0
+    return k_centers[nonzero], sums[nonzero] / counts[nonzero]
+
+
+# ==============================================================================
+# Fast Roughness Sampler for Massive Datasets (Tens of GB)
+# ==============================================================================
+def fast_sample_roughness(w2_file, out_sub_file=None):
+    """
+    Ultra-fast logarithmic seek sampler for massive roughness datasets (>10 MB up to tens of GB).
+    Extracts ~7,000 points spanning all decades in time within ~1-2 seconds without consuming RAM.
+    Caches the sampled points into out_sub_file for instant future loads.
+    """
+    fsize = os.path.getsize(w2_file)
+    if fsize < 10 * 1024 * 1024:
+        data = np.loadtxt(w2_file, skiprows=1)
+        if data.ndim == 1:
+            data = data.reshape(1, -1)
+        return data[:, 1], data[:, 3]
+
+    print(f"Applying fast logarithmic seek sampler to {Path(w2_file).name} ({fsize / 1e9:.2f} GB)...")
+    with open(w2_file, 'r') as f:
+        hdr = f.readline()
+        l1 = f.readline()
+        p1 = l1.split()
+        step1 = int(p1[0])
+        t1 = float(p1[1])
+
+        # Seek near end to discover total steps
+        f.seek(max(0, fsize - 8192))
+        tail_lines = f.readlines()
+        last_line = []
+        for line in reversed(tail_lines):
+            parts = line.split()
+            if len(parts) >= 4:
+                try:
+                    int(parts[0])
+                    last_line = parts
+                    break
+                except ValueError:
+                    continue
+        if not last_line:
+            last_line = tail_lines[-1].split()
+
+        total_steps = int(last_line[0])
+        total_time = float(last_line[1])
+        bytes_per_step = fsize / max(1, total_steps)
+
+    # Construct target step array: dense early + logarithmic thereafter
+    split_step = min(2000, total_steps)
+    early_steps = np.arange(1, split_step, 2)
+    log_steps = np.round(np.logspace(np.log10(max(1, split_step)), np.log10(total_steps), 6000)).astype(int)
+    target_steps = np.unique(np.concatenate([early_steps, log_steps]))
+
+    results = []
+    with open(w2_file, 'r') as f:
+        f.readline()  # header
+        early_target_set = set(early_steps)
+        current_step = 0
+        while current_step < split_step:
+            line = f.readline()
+            if not line:
+                break
+            parts = line.split()
+            if len(parts) >= 4:
+                try:
+                    s = int(parts[0])
+                    current_step = s
+                    if s in early_target_set:
+                        results.append((s, float(parts[1]), float(parts[2]), float(parts[3])))
+                except ValueError:
+                    continue
+
+        for s in target_steps:
+            if s <= split_step:
+                continue
+            offset = max(0, int(s * bytes_per_step) - 250)
+            f.seek(offset)
+            f.readline()  # discard partial line
+            line = f.readline()
+            if line:
+                parts = line.split()
+                if len(parts) >= 4:
+                    try:
+                        results.append((int(parts[0]), float(parts[1]), float(parts[2]), float(parts[3])))
+                    except ValueError:
+                        pass
+
+    # Sort and deduplicate
+    results.sort(key=lambda r: r[0])
+    _, uniq_idx = np.unique([r[0] for r in results], return_index=True)
+    results = [results[i] for i in uniq_idx]
+
+    if out_sub_file:
+        try:
+            with open(out_sub_file, 'w') as f_out:
+                f_out.write("step time mean_u var_u\n")
+                for r in results:
+                    f_out.write(f"{r[0]} {r[1]:.16e} {r[2]:.16e} {r[3]:.16e}\n")
+            print(f"Cached {len(results)} sampled points to: {out_sub_file}")
+        except Exception as e:
+            print(f"Note: Could not write cache {out_sub_file}: {e}")
+
+    t_arr = np.array([r[1] for r in results])
+    w_arr = np.array([r[3] for r in results])
+    return t_arr, w_arr
 
 
 # ==============================================================================
@@ -284,18 +399,34 @@ def load_all_data(data_dir, prefix_base, min_step=16384):
     step_files.sort(key=lambda p: p[0])
 
     spectra = []
+    has_pandas = False
+    try:
+        import pandas as pd
+        has_pandas = True
+    except ImportError:
+        pass
+
     for step, fpath in step_files:
         t = step * dt
-        data = np.loadtxt(fpath, skiprows=1)
-        if data.size > 0:
-            k, Sk = data[:, 0], data[:, 1]
-            mask = (k > 0) & (Sk > 0)
-            spectra.append((step, t, k[mask], Sk[mask]))
+        try:
+            if has_pandas:
+                df = pd.read_csv(fpath, sep=r'\s+', skiprows=1, header=None, engine='c', dtype=np.float64)
+                data = df.values
+            else:
+                data = np.loadtxt(fpath, skiprows=1)
+            if data.size > 0:
+                k, Sk = data[:, 0], data[:, 1]
+                mask = (k > 0) & (Sk > 0)
+                spectra.append((step, t, k[mask], Sk[mask]))
+        except Exception as e:
+            print(f"Warning: could not load spectrum {fpath}: {e}")
 
     w2_file = None
     sub_cand = list(data_dir.glob("*transient_w2_sub*.txt"))
+    is_sub = False
     if sub_cand:
         w2_file = str(sub_cand[0])
+        is_sub = True
     elif os.path.exists(f"{prefix_base}_transient_w2.txt"):
         w2_file = f"{prefix_base}_transient_w2.txt"
     else:
@@ -305,29 +436,19 @@ def load_all_data(data_dir, prefix_base, min_step=16384):
     t_w2, w2 = None, None
     if w2_file and os.path.exists(w2_file):
         try:
-            fsize = os.path.getsize(w2_file)
-            if fsize < 5 * 1024 * 1024:
-                data_w2 = np.loadtxt(w2_file, skiprows=1)
-                if data_w2.ndim == 1:
-                    data_w2 = data_w2.reshape(1, -1)
-                t_raw, w_raw = data_w2[:, 1], data_w2[:, 3]
+            if is_sub:
+                if has_pandas:
+                    df = pd.read_csv(w2_file, sep=r'\s+')
+                    t_raw = df['time'].values if 'time' in df else df.iloc[:, 1].values
+                    w_raw = df['var_u'].values if 'var_u' in df else df.iloc[:, 3].values
+                else:
+                    data_w2 = np.loadtxt(w2_file, skiprows=1)
+                    if data_w2.ndim == 1:
+                        data_w2 = data_w2.reshape(1, -1)
+                    t_raw, w_raw = data_w2[:, 1], data_w2[:, 3]
             else:
-                est_lines = fsize / 65.0
-                stride = max(1, int(est_lines / 6000))
-                t_list, w_list = [], []
-                with open(w2_file, "r") as f:
-                    f.readline()
-                    for i, line in enumerate(f):
-                        if i % stride == 0:
-                            parts = line.split()
-                            if len(parts) >= 4:
-                                try:
-                                    t_list.append(float(parts[1]))
-                                    w_list.append(float(parts[3]))
-                                except ValueError:
-                                    pass
-                t_raw = np.array(t_list)
-                w_raw = np.array(w_list)
+                out_sub = data_dir / f"{Path(prefix_base).name}_transient_w2_sub.txt"
+                t_raw, w_raw = fast_sample_roughness(w2_file, out_sub_file=str(out_sub))
 
             # Growth regime filter: t >= 300, positive finite roughness
             mask = (t_raw >= 300.0) & (w_raw > 0.0) & np.isfinite(w_raw)

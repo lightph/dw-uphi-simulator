@@ -329,7 +329,7 @@ def main():
                         help="Disable Floquet boundary contours overlay")
     parser.add_argument("--no-dc-strip", action="store_true",
                         help="Disable 1D DC phase strip below the phase diagram")
-    parser.add_argument("--export-paper", action="store_true", default=True,
+    parser.add_argument("--export-paper", action="store_true", default=False,
                         help="Also export phase diagram figure to paper/figuras/")
     parser.add_argument("-q", "--quiet", action="store_true",
                         help="Quiet execution mode")

@@ -85,6 +85,10 @@ EOF
 fi
 
 OUTPUT_FILE="${MASTER_DIR}/results_h0_${H0_VAL}.txt"
+if [ -s "$OUTPUT_FILE" ]; then
+    echo "Output file $OUTPUT_FILE already exists and is non-empty. Skipping task $SLURM_ARRAY_TASK_ID."
+    exit 0
+fi
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1 || echo "GPU")
 
 echo "=========================================================="

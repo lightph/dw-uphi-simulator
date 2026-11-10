@@ -43,7 +43,13 @@ L=256.0
 ALPHA="0.27"
 OMEGA="0.5"
 
-DT=$(awk -v omega=$OMEGA 'BEGIN { printf "%.16f", 2.0 * 3.14159265358979323846 / (320.0 * omega) }')
+# Safety cap on dt: ensure temporal resolution of fast exchange modes (omega_ex ~ 40)
+DT=$(awk -v omega=$OMEGA 'BEGIN {
+    dt = 2.0 * 3.14159265358979323846 / (320.0 * omega);
+    max_dt = 2.0 * 3.14159265358979323846 / 320.0;
+    if (dt > max_dt) dt = max_dt;
+    printf "%.16f", dt
+}')
 TRANSIENT=131072
 EVAL=$(awk -v omega=$OMEGA -v cycles=1000 'BEGIN { printf "%.10f", cycles * 4.0 * 3.14159265358979323846 / omega }')
 
@@ -58,7 +64,7 @@ HA_STEPS=401
 H0_VAL=$(awk -v min=$H0_MIN -v max=$H0_MAX -v steps=$H0_STEPS -v task=$SLURM_ARRAY_TASK_ID \
          'BEGIN { if (steps==0) print min; else printf "%.6f", min + task * (max - min) / steps }')
 
-MASTER_DIR="${PROJECT_DIR}/output/sweep_phase_diagram_alpha_${ALPHA}_omega_${OMEGA}"
+MASTER_DIR="${PROJECT_DIR}/output/sweep_phase_diagram_alpha_${ALPHA}_omega_${OMEGA}_dt_fixed"
 mkdir -p "$MASTER_DIR" "${PROJECT_DIR}/logs"
 
 if [ "$SLURM_ARRAY_TASK_ID" -eq 0 ]; then
@@ -85,6 +91,10 @@ EOF
 fi
 
 OUTPUT_FILE="${MASTER_DIR}/results_h0_${H0_VAL}.txt"
+if [ -s "$OUTPUT_FILE" ]; then
+    echo "Output file $OUTPUT_FILE already exists and is non-empty. Skipping task $SLURM_ARRAY_TASK_ID."
+    exit 0
+fi
 GPU_NAME=$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | head -n 1 || echo "GPU")
 
 echo "=========================================================="

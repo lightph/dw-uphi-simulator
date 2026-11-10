@@ -116,7 +116,7 @@ def load_sweep_dataset(data_dir, quiet=False):
     return data
 
 def load_floquet_boundaries(bin_path, num_h=1000, num_hac=1000, h_max=10.0, hac_max=20.0, quiet=False):
-    """Loads Floquet binary stability and synchrony data."""
+    """Loads Floquet binary stability and synchrony data with auto-detecting dimensions."""
     if not bin_path or not os.path.exists(bin_path):
         if not quiet:
             print(f"Note: Floquet bin file '{bin_path}' not found. Skipping overlay.")
@@ -130,10 +130,21 @@ def load_floquet_boundaries(bin_path, num_h=1000, num_hac=1000, h_max=10.0, hac_
 
     try:
         raw_data = np.fromfile(bin_path, dtype=dtype)
-        if len(raw_data) != num_h * num_hac:
-            if not quiet:
-                print(f"Warning: Unexpected bin size ({len(raw_data)}). Skipping.")
+        if len(raw_data) == 0:
             return False, None, None, None, None
+
+        if len(raw_data) != num_h * num_hac:
+            u_h = np.unique(raw_data['h'])
+            u_hac = np.unique(raw_data['h_ac'])
+            if len(u_h) * len(u_hac) == len(raw_data):
+                num_h = len(u_h)
+                num_hac = len(u_hac)
+                h_max = float(u_h.max())
+                hac_max = float(u_hac.max())
+            else:
+                if not quiet:
+                    print(f"Warning: Unexpected bin size ({len(raw_data)}). Skipping.")
+                return False, None, None, None, None
 
         converged_grid = raw_data['converged'].reshape((num_h, num_hac))
         mu_grid = raw_data['max_mu'].reshape((num_h, num_hac))
@@ -144,7 +155,7 @@ def load_floquet_boundaries(bin_path, num_h=1000, num_hac=1000, h_max=10.0, hac_
         H_GRID, HAC_GRID = np.meshgrid(h_vals, hac_vals, indexing='ij')
 
         if not quiet:
-            print(f"Loaded Floquet boundary data from {bin_path}")
+            print(f"Loaded Floquet boundary data from {bin_path} ({num_h}x{num_hac})")
         return True, H_GRID, HAC_GRID, converged_grid, mu_grid
     except Exception as e:
         if not quiet:
@@ -212,6 +223,25 @@ def detect_system_length(data_dir):
                     except ValueError:
                         pass
     return None
+
+def detect_omega(data_dir):
+    """Detects driving frequency Omega from run_parameters.txt or directory name."""
+    param_file = os.path.join(data_dir, "run_parameters.txt")
+    if os.path.exists(param_file):
+        with open(param_file, "r") as fp:
+            for line in fp:
+                if "Omega:" in line:
+                    try:
+                        return float(line.split(":")[-1].strip())
+                    except ValueError:
+                        pass
+    match = re.search(r'omega_([0-9\.]+)', data_dir)
+    if match:
+        try:
+            return float(match.group(1))
+        except ValueError:
+            pass
+    return 1.0
 
 def detect_hc(clean_phase_grid, u_h0, default_hc=3.825):
     """
@@ -311,8 +341,8 @@ def main():
     )
     parser.add_argument("--data-dir", default="output/sweep_full_973971",
                         help="Directory containing sweep results files")
-    parser.add_argument("--floquet-bin", default="output/floquet_transient_omega_1.000_L_1024.bin",
-                        help="Path to Floquet stability binary file")
+    parser.add_argument("--floquet-bin", default="AUTO",
+                        help="Path to Floquet stability binary file (default: AUTO detect based on dataset Omega)")
     parser.add_argument("-o", "--out-dir", default=None,
                         help="Directory to save figures (defaults to <data-dir>/figures)")
     parser.add_argument("--dpi", type=int, default=300,
@@ -348,9 +378,37 @@ def main():
     has_floquet = False
     H_GRID, HAC_GRID, conv_grid, mu_grid = None, None, None, None
     if not args.no_floquet:
-        has_floquet, H_GRID, HAC_GRID, conv_grid, mu_grid = load_floquet_boundaries(
-            args.floquet_bin, quiet=args.quiet
-        )
+        floquet_bin = args.floquet_bin
+        if floquet_bin == "AUTO":
+            omega_val = detect_omega(args.data_dir)
+            if abs(omega_val - 0.5) < 1e-3:
+                candidates = [
+                    "output/floquet_omega_0.5_highres.bin",
+                    "output/floquet_omega_0.5.bin"
+                ]
+            elif abs(omega_val - 1.5) < 1e-3:
+                candidates = [
+                    "output/floquet_omega_1.5_highres.bin",
+                    "output/floquet_omega_1.5.bin"
+                ]
+            elif abs(omega_val - 2.0) < 1e-3:
+                candidates = [
+                    "output/floquet_omega_2.0_highres.bin",
+                    "output/floquet_omega_2.0.bin"
+                ]
+            else:
+                candidates = [
+                    "output/floquet_transient_omega_1.000_L_256.bin",
+                    "output/floquet_transient_omega_1.000_L_1024.bin"
+                ]
+            floquet_bin = next((c for c in candidates if os.path.exists(c)), None)
+            if floquet_bin is None and not args.quiet:
+                print(f"Note: No Floquet stability binary found matching Omega={omega_val:.3f}. Skipping Floquet overlay.")
+
+        if floquet_bin and os.path.exists(floquet_bin):
+            has_floquet, H_GRID, HAC_GRID, conv_grid, mu_grid = load_floquet_boundaries(
+                floquet_bin, quiet=args.quiet
+            )
 
     # 3. Grid coordinates and pivot preparation
     u_h0, h0_idx = np.unique(data['h0'], return_inverse=True)
@@ -665,6 +723,68 @@ def main():
     if not args.quiet:
         print(f"Generated: {f6_png} and {f6_pdf}")
         print(f"\nAll publication figures successfully created in: {args.out_dir}")
+
+    # =========================================================================
+    # FIGURE 7: 3-PANEL SUMMARY (PHASE DIAGRAM, RUGOSITY, STROBOSCOPIC VARIANCE)
+    # =========================================================================
+    fig_sum, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14.2, 4.2))
+
+    # 1. Phase Diagram
+    ax1.pcolormesh(X, Y, clean_phase_grid, cmap=phase_cmap, vmin=-0.5, vmax=4.5,
+                   shading='nearest', rasterized=True)
+    if has_floquet:
+        add_floquet_contours(ax1, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
+    ax1.set_title(r'Phase Diagram', fontsize=12)
+    ax1.set_xlabel(r'$h_0$', fontsize=12)
+    ax1.set_ylabel(r'$h_\mathrm{a}$', fontsize=12)
+    ax1.set_xlim(0, 10)
+    ax1.set_ylim(0, 20)
+    ax1.legend(handles=phase_patches, loc='lower center', bbox_to_anchor=(0.5, 1.06),
+               ncol=5, frameon=True, framealpha=1.0, edgecolor='none',
+               handlelength=1.1, handletextpad=0.3, columnspacing=0.8, fontsize=9.5)
+
+    # 2. Rugosity
+    m2 = ax2.pcolormesh(X, Y, np.clip(rug_grid, 1e-15, None), cmap='inferno',
+                        norm=LogNorm(vmin=1e-15, vmax=vmax_rug), shading='nearest', rasterized=True)
+    cb2 = fig_sum.colorbar(m2, ax=ax2, pad=0.03)
+    cb2.set_label(r'$\langle w^2 \rangle_t$', fontsize=12)
+    cb2.set_ticks(ticks_rug)
+    cb2.ax.tick_params(direction='in', which='both')
+    if has_floquet:
+        add_floquet_contours(ax2, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
+    ax2.set_title(r'Rugosity $\langle w^2 \rangle_t$', fontsize=12)
+    ax2.set_xlabel(r'$h_0$', fontsize=12)
+    ax2.set_ylabel(r'$h_\mathrm{a}$', fontsize=12)
+    ax2.set_xlim(0, 10)
+    ax2.set_ylim(0, 20)
+
+    # 3. Stroboscopic Variance
+    m3 = ax3.pcolormesh(X, Y, np.clip(strobo_grid, 1e-15, None), cmap='magma',
+                        norm=LogNorm(vmin=1e-15, vmax=10.0), shading='nearest', rasterized=True)
+    cb3 = fig_sum.colorbar(m3, ax=ax3, pad=0.03)
+    cb3.set_label(r'$\langle \sigma^2 \rangle_x$', fontsize=12)
+    cb3.set_ticks([1e-15, 1e-12, 1e-9, 1e-6, 1e-3, 1e0, 1e1])
+    cb3.ax.tick_params(direction='in', which='both')
+    if has_floquet:
+        add_floquet_contours(ax3, H_GRID, HAC_GRID, conv_grid, mu_grid, lw=args.line_width)
+    ax3.set_title(r'Stroboscopic Variance $\langle \sigma^2 \rangle_x$', fontsize=12)
+    ax3.set_xlabel(r'$h_0$', fontsize=12)
+    ax3.set_ylabel(r'$h_\mathrm{a}$', fontsize=12)
+    ax3.set_xlim(0, 10)
+    ax3.set_ylim(0, 20)
+
+    for ax in (ax1, ax2, ax3):
+        ax.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+        ax.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+
+    plt.tight_layout()
+    f7_png = os.path.join(args.out_dir, "summary_3panel.png")
+    f7_pdf = os.path.join(args.out_dir, "summary_3panel.pdf")
+    fig_sum.savefig(f7_png, dpi=args.dpi)
+    fig_sum.savefig(f7_pdf)
+    plt.close(fig_sum)
+    if not args.quiet:
+        print(f"Generated: {f7_png} and {f7_pdf}")
 
     # =========================================================================
     # OPTIONAL EXPORT TO PAPER FIGURES DIRECTORY (SEPARATE SIZES, NEVER TOGETHER)
